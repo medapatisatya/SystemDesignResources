@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>301 vs 302 — The Backend Engineer's Field Manual</title>
+<style>
+  :root{
+    --bg:#0f1115;
+    --panel:#161a21;
+    --panel-2:#1c212a;
+    --line:#2a303c;
+    --text:#dbe1ea;
+    --text-dim:#8b93a3;
+    --perm:#5eead4;    /* permanent / method-preserving accent */
+    --temp:#f5a623;    /* temporary accent */
+    --danger:#f2545b;
+    --code-bg:#0b0d11;
+    --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.65;
+    font-size:16px;
+  }
+  a{color:var(--perm); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .layout{display:flex; max-width:1320px; margin:0 auto;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start;
+    width:270px; min-width:270px; height:100vh; overflow-y:auto;
+    padding:28px 18px 40px 28px;
+    border-right:1px solid var(--line);
+  }
+  nav.toc .brand{
+    font-family:var(--mono); font-size:12px; letter-spacing:.04em;
+    color:var(--text-dim); margin-bottom:18px;
+  }
+  nav.toc .brand strong{color:var(--perm);}
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:sec;}
+  nav.toc li{counter-increment:sec; margin:0;}
+  nav.toc a{
+    display:block; font-size:13px; color:var(--text-dim);
+    padding:5px 8px; border-radius:4px; line-height:1.4;
+  }
+  nav.toc a::before{
+    content:counter(sec) ". ";
+    color:var(--panel-2);
+    font-family:var(--mono);
+    color:#4a5567;
+  }
+  nav.toc a:hover, nav.toc a.active{
+    background:var(--panel); color:var(--text); text-decoration:none;
+  }
+  main{flex:1; min-width:0; padding:48px clamp(20px,5vw,72px) 120px;}
+  .hero{
+    padding-bottom:36px; margin-bottom:44px; border-bottom:1px solid var(--line);
+  }
+  .hero .kicker{
+    font-family:var(--mono); font-size:13px; color:var(--temp);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:clamp(30px,4vw,46px); line-height:1.12; margin:0 0 18px;
+    font-weight:600; max-width:14ch;
+  }
+  .hero p{color:var(--text-dim); max-width:62ch; font-size:17px;}
+  .hero .flow{
+    margin-top:26px; font-family:var(--mono); font-size:13px;
+    color:var(--text-dim); display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  }
+  .hero .flow span.node{
+    background:var(--panel); border:1px solid var(--line); border-radius:5px;
+    padding:4px 10px; color:var(--text);
+  }
+  .hero .flow span.arrow{color:#4a5567;}
+
+  section{margin:64px 0; scroll-margin-top:24px;}
+  section h2{
+    font-size:22px; font-weight:600; margin:0 0 6px;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  section h2 .num{font-family:var(--mono); color:var(--text-dim); font-size:15px; font-weight:400;}
+  section h3{font-size:16px; font-weight:600; margin:28px 0 10px; color:var(--text);}
+  section > p, section > ul, section > ol{max-width:74ch;}
+  p{margin:0 0 14px;}
+  ul,ol{padding-left:22px; margin:0 0 14px;}
+  li{margin-bottom:6px;}
+  strong{color:#fff; font-weight:600;}
+  code{
+    font-family:var(--mono); font-size:.88em; background:var(--panel-2);
+    padding:1px 5px; border-radius:4px; color:var(--perm);
+  }
+  pre{
+    background:var(--code-bg); border:1px solid var(--line); border-radius:8px;
+    padding:16px 18px; overflow-x:auto; font-family:var(--mono); font-size:13.5px;
+    line-height:1.55; margin:16px 0; max-width:78ch;
+  }
+  pre code{background:none; padding:0; color:var(--text);}
+  .status-301{color:var(--perm);}
+  .status-302{color:var(--temp);}
+  .status-danger{color:var(--danger);}
+
+  table{
+    border-collapse:collapse; width:100%; margin:18px 0; font-size:14px;
+    background:var(--panel);
+  }
+  caption{text-align:left; font-family:var(--mono); font-size:12px; color:var(--text-dim); margin-bottom:8px;}
+  th, td{
+    text-align:left; padding:10px 14px; border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  th{
+    background:var(--panel-2); font-family:var(--mono); font-size:12px;
+    text-transform:none; color:var(--text-dim); font-weight:500;
+    letter-spacing:.02em;
+  }
+  tr:last-child td{border-bottom:none;}
+  td:first-child, th:first-child{color:var(--text); font-weight:600;}
+
+  .callout{
+    border-left:3px solid var(--temp); background:var(--panel);
+    padding:14px 18px; border-radius:0 6px 6px 0; margin:18px 0; max-width:74ch;
+  }
+  .callout.danger{border-left-color:var(--danger);}
+  .callout p:last-child{margin-bottom:0;}
+  .callout .label{font-family:var(--mono); font-size:11px; color:var(--temp); margin-bottom:6px;}
+  .callout.danger .label{color:var(--danger);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:78ch;}
+  @media (max-width:720px){.grid2{grid-template-columns:1fr;}}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px;
+  }
+  .card h4{margin:0 0 8px; font-family:var(--mono); font-size:13px;}
+  .card.perm h4{color:var(--perm);}
+  .card.temp h4{color:var(--temp);}
+
+  .qa{border:1px solid var(--line); border-radius:8px; margin:14px 0; overflow:hidden; max-width:78ch;}
+  .qa summary{
+    cursor:pointer; padding:14px 18px; background:var(--panel);
+    font-weight:600; list-style:none; display:flex; justify-content:space-between; gap:10px;
+  }
+  .qa summary::-webkit-details-marker{display:none;}
+  .qa summary::after{content:"+"; color:var(--text-dim); font-family:var(--mono); font-weight:400;}
+  .qa[open] summary::after{content:"−";}
+  .qa .body{padding:4px 18px 16px; color:var(--text-dim); font-size:14.5px;}
+  .qa .body strong{color:var(--text);}
+
+  .incident{
+    border:1px solid var(--line); border-radius:8px; padding:18px 20px; margin:16px 0; max-width:78ch;
+    background:var(--panel);
+  }
+  .incident h4{margin:0 0 10px; font-size:15px;}
+  .incident dl{margin:0; display:grid; grid-template-columns:120px 1fr; gap:6px 14px; font-size:14px;}
+  .incident dt{color:var(--text-dim); font-family:var(--mono); font-size:12px; padding-top:2px;}
+  .incident dd{margin:0; color:var(--text);}
+
+  .mistake-list{max-width:78ch;}
+  .mistake-list li{margin-bottom:12px;}
+  .mistake-list .why{color:var(--text-dim); font-size:14px; display:block; margin-top:2px;}
+
+  .cheat{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:28px 30px; max-width:78ch;
+  }
+  .cheat h3{margin-top:0;}
+  .cheat .rule{display:flex; justify-content:space-between; gap:14px; padding:8px 0; border-bottom:1px dashed var(--line); font-family:var(--mono); font-size:13.5px;}
+  .cheat .rule:last-child{border-bottom:none;}
+  .cheat .rule .q{color:var(--text-dim);}
+  .cheat .rule .a{color:var(--perm); text-align:right;}
+
+  .summary-box{
+    background:linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border:1px solid var(--line); border-radius:10px; padding:30px 32px; max-width:78ch;
+  }
+  .summary-box h3{margin-top:0; color:var(--temp);}
+  .badge{
+    display:inline-block; font-family:var(--mono); font-size:11px;
+    padding:2px 8px; border-radius:20px; border:1px solid var(--line); color:var(--text-dim);
+    margin-right:6px;
+  }
+  hr.soft{border:none; border-top:1px solid var(--line); margin:40px 0; max-width:78ch;}
+  footer{border-top:1px solid var(--line); padding:30px clamp(20px,5vw,72px); color:var(--text-dim); font-size:13px; font-family:var(--mono);}
+  ::selection{background:#2a4a45; color:#fff;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" id="toc">
+  <div class="brand"><strong>HTTP/3xx</strong> — Field Manual</div>
+  <ol>
+    <li><a href="#s1">HTTP Basics &amp; the Redirect Flow</a></li>
+    <li><a href="#s2">301 vs 302 — Core Difference</a></li>
+    <li><a href="#s3">Semantics: 301/302/303/307/308</a></li>
+    <li><a href="#s4">GET vs POST</a></li>
+    <li><a href="#s5">Browser Behavior</a></li>
+    <li><a href="#s6">Caching Behavior</a></li>
+    <li><a href="#s7">SEO</a></li>
+    <li><a href="#s8">20 Real-World Use Cases</a></li>
+    <li><a href="#s9">Redirect vs Rewrite</a></li>
+    <li><a href="#s10">Redirect Chains &amp; Loops</a></li>
+    <li><a href="#s11">Redirects in System Design</a></li>
+    <li><a href="#s12">CDN + Redirects</a></li>
+    <li><a href="#s13">Load Balancer Use Cases</a></li>
+    <li><a href="#s14">Authentication &amp; Login</a></li>
+    <li><a href="#s15">OAuth</a></li>
+    <li><a href="#s16">API Design</a></li>
+    <li><a href="#s17">Security</a></li>
+    <li><a href="#s18">Performance</a></li>
+    <li><a href="#s19">Distributed Systems</a></li>
+    <li><a href="#s20">Redirect vs DNS</a></li>
+    <li><a href="#s21">Decision Framework</a></li>
+    <li><a href="#s22">Troubleshooting Scenarios</a></li>
+    <li><a href="#s23">25 Interview Questions</a></li>
+    <li><a href="#s24">Design a Redirect Service</a></li>
+    <li><a href="#s25">Capacity Estimation</a></li>
+    <li><a href="#s26">Observability</a></li>
+    <li><a href="#s27">15 Common Mistakes</a></li>
+    <li><a href="#s28">Cheat Sheet</a></li>
+  </ol>
+</nav>
+
+<main>
+  <div class="hero">
+    <div class="kicker">SYSTEM DESIGN / BACKEND / HTTP SEMANTICS</div>
+    <h1>301 vs 302, and everything that actually depends on it</h1>
+    <p>A response code is a promise. 301 tells every cache, browser, and crawler between you and the client "stop asking, this is permanent." 302 tells them "ask again next time." That one bit of intent ripples through caching, SEO, load balancers, OAuth, payment APIs, and multi-region failover — which is exactly why it's a favorite system-design interview thread.</p>
+    <div class="flow">
+      <span class="node">Request</span><span class="arrow">→</span>
+      <span class="node">Server</span><span class="arrow">→</span>
+      <span class="node">3xx + Location</span><span class="arrow">→</span>
+      <span class="node">Client decision</span><span class="arrow">→</span>
+      <span class="node">Cache?</span><span class="arrow">→</span>
+      <span class="node">New request</span>
+    </div>
+  </div>
+
+  <!-- 1 -->
+  <section id="s1">
+    <h2><span class="num">01</span> HTTP Basics &amp; the Redirect Flow</h2>
+    <p>An HTTP redirect is nothing exotic at the protocol level: it's an ordinary HTTP response whose status code falls in the <strong>3xx</strong> class, carrying a <code>Location</code> header that tells the client where to go instead. The server never fetches the new resource on the client's behalf — it hands back a pointer and steps out of the way. That's the whole mechanism.</p>
+    <p>The <code>Location</code> header can be absolute (<code>https://example.com/new</code>) or relative (<code>/new</code>); browsers resolve relative locations against the request URL. Nothing about a 3xx response contains a body the client is meant to render — some servers send a small HTML fallback body for non-following clients, but it's not the mechanism.</p>
+    <pre><code>GET /old-url HTTP/1.1
+Host: example.com
+
+→
+
+HTTP/1.1 301 Moved Permanently
+Location: https://example.com/new-url
+Content-Length: 0</code></pre>
+    <p>The client — a browser, a curl process, an SDK — reads the status code, decides whether to follow it, and if so, issues a <strong>brand-new HTTP request</strong> to the URL in <code>Location</code>. Two full request/response cycles happen where the caller only asked for one.</p>
+    <pre><code>Original Request
+      │
+      ▼
+   Server
+      │
+      ▼
+  301 / 302  ──── Location: /new-url
+      │
+      ▼
+Client evaluates status + follows
+      │
+      ▼
+  New HTTP request → GET /new-url
+      │
+      ▼
+   200 OK</code></pre>
+    <div class="callout">
+      <div class="label">KEY MENTAL MODEL</div>
+      <p>A redirect is a <strong>response</strong>, never an internal server-side rewrite. The server that issued the 301 is not necessarily the server that serves the final content, and the client — not the server — decides whether, and how, to follow it. That distinction is the seed of almost every trade-off in this document.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <h2><span class="num">02</span> 301 vs 302 — Core Difference</h2>
+    <p><strong>301 Moved Permanently</strong> asserts that the resource has moved for good — bookmark the new URL, update your links, transfer any authority you associated with the old one to the new one. <strong>302 Found</strong> (historically "Moved Temporarily") asserts the opposite: this is a detour, the old URL is still the "real" one, don't update anything durable.</p>
+    <p>That single bit of intent is read by three different audiences, each of which reacts differently:</p>
+    <ul>
+      <li><strong>Clients / browsers</strong> may cache a 301 indefinitely and stop hitting the old URL at all on future navigations. A 302 is refetched from the origin every time unless explicit cache headers say otherwise.</li>
+      <li><strong>Caches / CDNs / proxies</strong> treat 301 as a candidate for long-lived, heuristic caching per RFC 7231 even with no explicit <code>Cache-Control</code>; 302 is not cached by default.</li>
+      <li><strong>Search engines</strong> transfer ranking signal ("link equity") from the old URL to the new one on a 301, and index the new URL as canonical. On a 302, they keep the old URL indexed and treat the new one as a temporary destination.</li>
+    </ul>
+    <table>
+      <tr><th>Property</th><th>301</th><th>302</th></tr>
+      <tr><td>Meaning</td><td>Moved Permanently</td><td>Found (temporary)</td></tr>
+      <tr><td>Permanent?</td><td>Yes — resource identity moves</td><td>No</td></tr>
+      <tr><td>Temporary?</td><td>No</td><td>Yes — origin URL stays canonical</td></tr>
+      <tr><td>Browser behavior</td><td>May cache and skip the old URL entirely on next visit</td><td>Always re-requests the old URL</td></tr>
+      <tr><td>Caching implications</td><td>Cacheable by default (heuristic), often long-lived</td><td>Not cached by default</td></tr>
+      <tr><td>SEO implications</td><td>Transfers link equity to new URL</td><td>Old URL stays indexed/canonical</td></tr>
+      <tr><td>Search engine signals</td><td>New URL becomes canonical</td><td>No canonical change</td></tr>
+      <tr><td>Typical use cases</td><td>Domain migration, permanent URL restructuring, HTTP→HTTPS</td><td>A/B tests, campaigns, maintenance pages, login gating</td></tr>
+      <tr><td>API usage</td><td>Rare; permanent endpoint retirement</td><td>Rare; generally avoided in favor of versioning</td></tr>
+      <tr><td>CDN implications</td><td>Safe to cache at the edge with long TTL</td><td>Should bypass or use very short TTL</td></tr>
+      <tr><td>Risk of using incorrectly</td><td>Hard to undo — caches may "remember" for a long time</td><td>Search engines/caches never adopt the new URL as canonical, even if it should be permanent</td></tr>
+    </table>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <h2><span class="num">03</span> The Semantics Get Messy: 301, 302, 303, 307, 308</h2>
+    <p>301 and 302 both predate a clean specification of what should happen to the HTTP <em>method</em> and <em>body</em> across the redirect. In practice, most browsers historically converted a <code>POST</code> into a <code>GET</code> on both 301 and 302 — a quirk of early Netscape/IE behavior that got baked into the ecosystem long before it was written down properly. That ambiguity is exactly why <strong>303, 307, and 308</strong> exist: they disambiguate intent that 301/302 left fuzzy.</p>
+    <ul>
+      <li><strong>303 See Other</strong> — explicitly says "the result of your request is over there; go fetch it with <code>GET</code>," regardless of what method the original request used. This formalizes the informal POST→GET behavior instead of leaving it to convention.</li>
+      <li><strong>307 Temporary Redirect</strong> — behaves like 302 but guarantees the method and body are preserved. A redirected <code>POST</code> stays a <code>POST</code>.</li>
+      <li><strong>308 Permanent Redirect</strong> — behaves like 301 but guarantees method/body preservation. A redirected <code>POST</code> stays a <code>POST</code>, permanently moved.</li>
+    </ul>
+    <table>
+      <tr><th>Status</th><th>Permanent?</th><th>Temporary?</th><th>Method preserved?</th><th>Typical purpose</th></tr>
+      <tr><td>301</td><td>Yes</td><td>No</td><td>Historically no (often becomes GET)</td><td>Legacy permanent redirect, still the most common in the wild</td></tr>
+      <tr><td>302</td><td>No</td><td>Yes</td><td>Historically no (often becomes GET)</td><td>Legacy temporary redirect, still extremely common (e.g. login flows)</td></tr>
+      <tr><td>303</td><td>No</td><td>Yes</td><td>No — forces GET on purpose</td><td>Post/Redirect/Get pattern after a form submission</td></tr>
+      <tr><td>307</td><td>No</td><td>Yes</td><td>Yes — guaranteed</td><td>Temporary redirect where method/body must not change (retries, non-idempotent APIs)</td></tr>
+      <tr><td>308</td><td>Yes</td><td>No</td><td>Yes — guaranteed</td><td>Permanent redirect where method/body must not change (API endpoint moves)</td></tr>
+    </table>
+    <h3>301 vs 308</h3>
+    <p>Both say "this moved for good." The only difference is contract strength on the method: 301 leaves method handling to client convention (usually GET-coercion for old clients), 308 makes preservation mandatory. Prefer 308 for any permanent move where the endpoint accepts non-GET methods — API base-path migrations, for example.</p>
+    <h3>302 vs 307</h3>
+    <p>Same relationship, one rung down the permanence ladder. 302 is the historically ambiguous "temporary, probably becomes GET." 307 is "temporary, and I promise your method and body survive." Use 307 for temporary redirects in front of anything that isn't a plain <code>GET</code> — feature-flagged traffic shifting in front of a write API, for instance.</p>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <h2><span class="num">04</span> GET vs POST — Why This Is the Interview Trap</h2>
+    <p>This is where the interview usually pivots from trivia to real engineering judgment. The historical behavior — many browsers convert <code>POST → GET</code> on a 301 or 302 — is not part of the original HTTP spec; it's convention that RFC 7231 later documented as "widely deployed" so implementers wouldn't have to guess.</p>
+    <pre><code>POST /payment            (client submits a charge)
+      │
+      ▼
+    302 Found
+Location: /success
+      │
+      ▼
+GET /success              ← body/method silently dropped</code></pre>
+    <p>That's usually harmless for a "thanks for your order" page. It is <strong>not</strong> harmless if the redirect target is meant to re-execute the write — a client naively retrying, or a proxy following a 302 blindly, can drop the payload of a payment or state-changing call, or worse, resubmit a GET that was never meant to trigger a side effect.</p>
+    <pre><code>POST /payment
+      │
+      ▼
+    307 Temporary Redirect
+Location: /payment-v2
+      │
+      ▼
+POST /payment-v2          ← method AND body preserved intact</code></pre>
+    <div class="callout danger">
+      <div class="label">WHY THIS MATTERS FOR MONEY-MOVING ENDPOINTS</div>
+      <p>If a payment gateway migrates its charge endpoint and redirects with 301/302, a strict client that preserves the method (many modern HTTP libraries do, breaking the old convention) will resend the <code>POST</code> — potentially double-charging. If a loose client instead drops it to <code>GET</code>, the charge silently never happens. Neither behavior is guaranteed by 301/302, which is precisely the danger: the outcome depends on the client, not the server's intent. 307/308 remove that ambiguity, and idempotency keys remove the remaining risk from client retries.</p>
+    </div>
+    <p>General rule for non-<code>GET</code> methods (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>): if you need the method preserved, use 307/308, never 301/302. Combine with an idempotency key on the write itself so that even a legitimate retry after a redirect can't double-apply.</p>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <h2><span class="num">05</span> Browser Behavior</h2>
+    <p>On receiving <code>301 Location: /new</code>, a browser updates the address bar to the new URL, issues the follow-up request automatically (invisible to the user beyond a possible flicker), and typically records only the <em>final</em> URL in history — the intermediate hop usually isn't a separate back-button stop.</p>
+    <p>The important system-design detail: browsers are allowed to <strong>cache the redirect mapping itself</strong>, separate from caching the eventual page content. Once a browser has cached a 301 from <code>http://example.com</code> to <code>https://example.com</code>, it may go straight to HTTPS on the next visit without ever issuing the HTTP request — no round trip to your server at all.</p>
+    <pre><code>Visit 1:  http://example.com → 301 → https://example.com   (cached)
+Visit 2:  browser rewrites to https://example.com internally, no HTTP hop</code></pre>
+    <p>This is a double-edged sword: it's why 301 is the right tool for HTTP→HTTPS upgrades (fewer round trips over time), and it's exactly why a <em>mistaken</em> 301 is painful — some fraction of returning users will have it burned into their browser cache long after you've fixed the server, with no user-facing way to know that's happening. <strong>Redirect chains</strong> (A→B→C) and <strong>redirect loops</strong> (A→B→A) both show up here too — browsers cap the number of hops they'll follow (Chrome/Firefox: 20) and fail with an error rather than spin forever.</p>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <h2><span class="num">06</span> Caching Behavior</h2>
+    <p>301 responses are <strong>heuristically cacheable</strong> under HTTP caching rules even without an explicit <code>Cache-Control</code> header — browsers, CDNs, and proxies are all permitted to store them and skip the origin on future requests. 302 responses are <strong>not</strong> cached by default; they require an explicit <code>Cache-Control: max-age=...</code> to become cacheable at all, and most real deployments don't add one, precisely because the whole point of a 302 is that it might change.</p>
+    <pre><code>301 + Cache-Control: max-age=31536000, immutable
+  → CDN edges, browsers, and proxies may serve this redirect
+    for a year without touching your origin.
+
+302 (no Cache-Control)
+  → every hit re-executes the redirect logic at the origin.</code></pre>
+    <p><code>ETag</code> and <code>Vary</code> matter less for redirects themselves than for the destination resource, but they still apply if you explicitly opt a 302 into caching — e.g. <code>Vary: Accept-Language</code> for a geo/language redirect you're willing to cache per-locale.</p>
+    <div class="callout danger">
+      <div class="label">THE OPERATIONAL TRAP</div>
+      <p>"What happens if I return a 301 and later want to change the destination?" — the honest answer is: it's expensive to undo. Browsers, corporate proxies, and CDN edges may have cached the old mapping for months. Practically: keep 301 TTLs bounded (days, not "forever," despite the RFC allowing indefinite heuristic caching) unless you're certain the move is truly final, and treat any 301 rollout as a one-way door.</p>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <h2><span class="num">07</span> SEO</h2>
+    <p>Search engines use the 301/302 distinction as an explicit signal for what to do with ranking authority. A 301 tells the crawler to fold the old URL's backlinks, authority, and indexing history into the new URL and eventually drop the old one from the index. A 302 tells the crawler "keep the old URL as the canonical, indexed page; this destination is transient" — link equity stays put.</p>
+    <div class="grid2">
+      <div class="card perm">
+        <h4>Permanent migration → 301</h4>
+        <pre><code>/blog/old-post
+     │
+     ▼
+    301
+     │
+     ▼
+/blog/new-post</code></pre>
+        <p style="margin-bottom:0">Correct: rankings and backlink equity transfer to the new URL over time.</p>
+      </div>
+      <div class="card temp">
+        <h4>Temporary promotion → 302</h4>
+        <pre><code>/product
+     │
+     ▼
+    302
+     │
+     ▼
+/sale</code></pre>
+        <p style="margin-bottom:0">Correct: <code>/product</code> stays the canonical, indexed page after the sale ends.</p>
+      </div>
+    </div>
+    <p>Using a 302 for what is actually a permanent migration is a common, costly mistake: the old URL keeps its indexing and the new one never accrues authority, so organic traffic to the new location stays artificially low indefinitely — this is a frequent root cause of "SEO traffic dropped after our redesign" incidents.</p>
+    <p>That said, <strong>SEO should not be the only reason</strong> to pick 301 vs 302. The correct choice is determined by whether the move is actually permanent; SEO behavior is a downstream consequence of getting that call right, not an independent lever to optimize. Choosing 301 purely to "get the SEO benefit" for something you might revert is how teams end up with the caching trap above.</p>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <h2><span class="num">08</span> 20 Real-World Use Cases</h2>
+    <table>
+      <tr><th>#</th><th>Scenario</th><th>Code</th><th>Why</th></tr>
+      <tr><td>1</td><td>HTTP → HTTPS</td><td class="status-301">301</td><td>The plaintext URL is permanently superseded; lets browsers skip HTTP entirely on future visits.</td></tr>
+      <tr><td>2</td><td>Domain migration</td><td class="status-301">301 (or 308 if APIs live on it)</td><td>Old domain is retired for good; transfers SEO authority.</td></tr>
+      <tr><td>3</td><td>Old URL → new URL</td><td class="status-301">301</td><td>Canonical identity of the resource has changed permanently.</td></tr>
+      <tr><td>4</td><td>Temporary marketing campaign</td><td class="status-302">302</td><td>Landing page is transient; original URL stays canonical.</td></tr>
+      <tr><td>5</td><td>A/B testing</td><td class="status-302">302</td><td>Variant assignment must never be cached or treated as canonical.</td></tr>
+      <tr><td>6</td><td>Geographic routing</td><td class="status-302">302 (or DNS-based — see §20)</td><td>Destination varies per request context; not a fixed resource move.</td></tr>
+      <tr><td>7</td><td>Maintenance page</td><td class="status-302">302</td><td>Explicitly temporary; must never get cached as permanent.</td></tr>
+      <tr><td>8</td><td>Login redirect</td><td class="status-302">302 (or 303 after a POST login)</td><td>Post-auth destination is contextual, not a permanent resource move.</td></tr>
+      <tr><td>9</td><td>OAuth callback</td><td class="status-302">302</td><td>Standard mandated by OAuth2/OIDC specs; always temporary, never cached.</td></tr>
+      <tr><td>10</td><td>POST form → success page</td><td>303</td><td>Prevents duplicate submission on refresh (PRG pattern); forces GET.</td></tr>
+      <tr><td>11</td><td>API version migration</td><td>308</td><td>Permanent move that must preserve non-GET methods.</td></tr>
+      <tr><td>12</td><td>Deprecated API endpoint</td><td>308 (or explicit error + docs, see §16)</td><td>If redirecting at all, method preservation is mandatory for write endpoints.</td></tr>
+      <tr><td>13</td><td>CDN failover</td><td>Avoid HTTP redirect — use edge routing</td><td>Must react in milliseconds without a client round trip; belongs at the routing layer.</td></tr>
+      <tr><td>14</td><td>Blue-green deployment</td><td>Avoid HTTP redirect — use LB/routing</td><td>Traffic shifting is infrastructure-level, not a resource identity change.</td></tr>
+      <tr><td>15</td><td>Canary deployment</td><td>Avoid HTTP redirect — use LB/routing</td><td>Percentage-based routing has no clean 3xx semantics.</td></tr>
+      <tr><td>16</td><td>Temporary traffic migration</td><td class="status-302">302 (rare) or routing</td><td>Usually better solved at LB/DNS layer; HTTP redirect only for URL-visible moves.</td></tr>
+      <tr><td>17</td><td>Payment workflow</td><td>307 / 303</td><td>307 preserves POST safety pre-charge; 303 for the post-charge receipt GET.</td></tr>
+      <tr><td>18</td><td>File download migration</td><td class="status-301">301</td><td>Permanent relocation of a static asset URL.</td></tr>
+      <tr><td>19</td><td>Mobile vs desktop routing</td><td class="status-302">302 (better: responsive design)</td><td>Context-dependent, not a resource move; redirect fights caching and hurts perf.</td></tr>
+      <tr><td>20</td><td>Regional routing</td><td>DNS/GeoDNS or edge routing</td><td>Same physical resource, different edge — not an HTTP-layer concern.</td></tr>
+    </table>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <h2><span class="num">09</span> Redirect vs Rewrite</h2>
+    <p>These get conflated constantly, and the distinction is one of the most common interview clarifying-question moments.</p>
+    <div class="grid2">
+      <div class="card">
+        <h4>Redirect</h4>
+        <pre><code>Client → GET /old
+Server → 301 Location:/new
+Client → GET /new (new request!)</code></pre>
+        <p style="margin-bottom:0">Browser URL changes. A second, fully independent network round trip occurs. Visible to SEO crawlers as a URL change.</p>
+      </div>
+      <div class="card">
+        <h4>Internal rewrite</h4>
+        <pre><code>Client → GET /old
+Server → internally serves /new's content
+Client ← 200 OK (as /old)</code></pre>
+        <p style="margin-bottom:0">Browser URL stays <code>/old</code>. One network round trip. Invisible to the client and to crawlers.</p>
+      </div>
+    </div>
+    <p>Performance-wise, a rewrite avoids the extra RTT entirely — it's resolved inside the web server or app layer (NGINX <code>rewrite</code>/<code>try_files</code>, Apache <code>mod_rewrite</code> without <code>[R]</code>). Use a <strong>rewrite</strong> when you want two URLs to serve identical content without exposing the mapping to the client (clean URLs in front of a query-string-based backend, for example). Use a <strong>redirect</strong> when the URL itself is the thing that changed and you want the client, caches, and search engines to know about it.</p>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <h2><span class="num">10</span> Redirect Chains &amp; Loops</h2>
+    <pre><code>A → 301 → B → 301 → C → 200 OK</code></pre>
+    <p>Every extra hop is a full round trip, so a two-hop chain roughly doubles pre-content latency versus a direct redirect, compounds on high-latency mobile networks, and complicates SEO crawlers' ability (and budget) to follow the chain to a final canonical URL. CDNs and browsers alike impose maximum hop counts and will hard-fail past them — which is also how <strong>redirect loops</strong> (A→B→A) get caught in practice, rather than through explicit server-side detection.</p>
+    <pre><code>Prefer:  A → 301 → C → 200
+Avoid:   A → 301 → B → 301 → C → 200</code></pre>
+    <p>The fix is almost always the same: when you migrate a URL that's already the target of an existing redirect, update the <em>original</em> source to point straight at the new final destination instead of layering a new hop on top — treat your redirect map as a graph you flatten on every change, not an append-only log.</p>
+  </section>
+
+  <!-- 11 -->
+  <section id="s11">
+    <h2><span class="num">11</span> Redirects in System Design</h2>
+    <pre><code>Client → DNS → CDN → Load Balancer → API Gateway → Application Servers</code></pre>
+    <p>Redirects can be generated at essentially every layer, and <em>where</em> you generate one is itself a design decision with real trade-offs:</p>
+    <table>
+      <tr><th>Layer</th><th>Why generate here</th><th>Advantage</th><th>Disadvantage</th></tr>
+      <tr><td>CDN / edge</td><td>Static, high-volume, geography-agnostic redirects (HTTP→HTTPS, retired domains)</td><td>Lowest latency — never touches origin; scales infinitely</td><td>Harder to change quickly; propagation delay across edge nodes</td></tr>
+      <tr><td>Load balancer</td><td>Protocol upgrades, host-based routing, maintenance mode</td><td>Cheap, centralized, no application code involved</td><td>Limited logic — usually rule-based, not content-aware</td></tr>
+      <tr><td>API gateway</td><td>API version deprecation, endpoint consolidation</td><td>Centralized policy across many backend services</td><td>Adds a hop for every request even non-redirected ones if misconfigured</td></tr>
+      <tr><td>Application server</td><td>Business-logic-dependent redirects (auth state, A/B assignment)</td><td>Full context available (session, user, feature flags)</td><td>Highest latency and cost per redirect — full app stack is invoked just to say "go elsewhere"</td></tr>
+      <tr><td>NGINX / reverse proxy</td><td>URL restructuring, legacy path cleanup</td><td>Fast, configuration-driven, no code deploy needed</td><td>Config sprawl over time if not carefully maintained</td></tr>
+    </table>
+    <p>General principle: push a redirect as far toward the edge as the decision logic allows. A redirect that only needs to know "is this HTTP or HTTPS" belongs at the load balancer or CDN, not at an application server three hops deeper into the stack.</p>
+  </section>
+
+  <!-- 12 -->
+  <section id="s12">
+    <h2><span class="num">12</span> CDN + Redirects</h2>
+    <p>CDNs can cache redirect responses at the edge just like any other cacheable response, governed by the same <code>Cache-Control</code>/TTL rules. The distinction that matters operationally is <strong>edge-generated</strong> vs <strong>origin-generated</strong> redirects:</p>
+    <pre><code>User in India
+     │
+     ▼
+CDN Edge (Mumbai)
+     │
+     ▼
+301 → https://example.com     ← never touched the origin at all</code></pre>
+    <p>An edge-generated 301 (configured directly in the CDN, e.g. a "redirect rule" for HTTP→HTTPS or a retired hostname) answers in single-digit milliseconds worldwide and never costs the origin a request. An origin-generated redirect (the app server decides and returns the 301) still benefits from CDN caching on <em>subsequent</em> requests, but the first hit at each edge node pays the full round trip to origin.</p>
+    <p>Cache invalidation is the operational cost of this speed: once a redirect is cached globally across edge nodes, changing the destination requires an explicit purge/invalidation across every point of presence — and until that propagates, different users in different regions can be redirected to different places simultaneously. Bounded TTLs (rather than "cache forever") are the usual mitigation.</p>
+  </section>
+
+  <!-- 13 -->
+  <section id="s13">
+    <h2><span class="num">13</span> Load Balancer Use Cases</h2>
+    <pre><code>Client → HTTP Load Balancer → 301 → HTTPS</code></pre>
+    <p>Terminating the HTTP→HTTPS upgrade at the load balancer means plaintext requests never reach an application server at all — cheaper, and it keeps "does this app speak HTTP" out of every service's concern entirely. It's also the natural place for:</p>
+    <ul>
+      <li><strong>Host-based routing</strong> combined with redirects for retired or merged hostnames.</li>
+      <li><strong>Path-based routing</strong> where an old top-level path permanently maps to a new service.</li>
+      <li><strong>Temporary migration</strong> redirects during a phased cutover, removed once the migration completes.</li>
+      <li><strong>Maintenance mode</strong> — a single LB rule can 302 all traffic to a static status page without touching any backend deploys.</li>
+      <li><strong>Region routing</strong> hints, though pure geographic routing is usually better handled at DNS/anycast (see §20).</li>
+    </ul>
+  </section>
+
+  <!-- 14 -->
+  <section id="s14">
+    <h2><span class="num">14</span> Authentication &amp; Login</h2>
+    <pre><code>User → GET /dashboard
+     → 401 or redirect
+     → 302 Location: /login?returnUrl=/dashboard
+     → user authenticates
+     → 302 Location: /dashboard</code></pre>
+    <p>Login redirects are 302 (sometimes 303 after a POST-based login form, to avoid a resubmission prompt on refresh) because the destination is entirely session-dependent — it must never be cached, and it's never "permanent" in the HTTP sense. The <code>returnUrl</code>/<code>next</code> query parameter is what makes "log in, then land back where you were" work.</p>
+    <div class="callout danger">
+      <div class="label">OPEN REDIRECT</div>
+      <p>Blindly trusting <code>?redirect=https://evil.com</code> and 302-ing the authenticated session there is a classic <strong>open redirect</strong> vulnerability — attackers craft links through your trusted domain that ultimately land the user on a phishing page, benefiting from your domain's reputation right up to the final hop. Safe handling means validating that the return target is a relative path (or matches an explicit allow-list of your own hosts) before ever placing it in a <code>Location</code> header — never redirect to a raw, unvalidated absolute URL supplied by the client.</p>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section id="s15">
+    <h2><span class="num">15</span> OAuth</h2>
+    <pre><code>Browser → Application
+        → 302 → Authorization Server
+        → user authenticates + consents
+        → 302 → Application callback (with code/token)</code></pre>
+    <p>Redirects aren't incidental to OAuth/OIDC — they're the entire transport mechanism for moving the browser (and only the browser, carrying the user's authenticated session) between the relying party and the identity provider without either party needing direct access to the other's session cookies. That's also precisely why <strong>callback URL validation</strong> is non-negotiable: an authorization server that redirects to an attacker-supplied callback hands over an authorization code or token to whoever controls that URL. Registered, exact-match redirect URIs (not prefix-matched, not wildcarded) are the standard mitigation.</p>
+    <p>It's worth being explicit about the difference between the browser-mediated 302s in the flow above and the <strong>server-to-server</strong> token exchange that follows — the application's backend calls the authorization server's token endpoint directly (no redirect, no browser involvement) to trade the authorization code for tokens. Conflating "redirect the browser" with "make a backend call" is a common source of confused OAuth implementations.</p>
+  </section>
+
+  <!-- 16 -->
+  <section id="s16">
+    <h2><span class="num">16</span> API Design</h2>
+    <p>Should <code>GET /v1/users</code> redirect to <code>/v2/users</code>? Generally, <strong>no</strong> — or at least, not as the primary versioning strategy. Redirects assume a browser-like client that transparently follows 3xx responses, and a large share of API consumers don't behave that way:</p>
+    <ul>
+      <li>Many SDKs and HTTP clients don't follow redirects by default for non-GET verbs, or require explicit opt-in.</li>
+      <li>A redirect silently adds a full extra round trip to every call — invisible latency that's hard to diagnose downstream.</li>
+      <li>Authorization headers are, by design and by browser security policy, <strong>not</strong> automatically forwarded across a cross-origin redirect in many client implementations — a redirected API call can arrive at the new host unauthenticated.</li>
+      <li>Retries, circuit breakers, and observability tooling built around "one request → one response" get harder to reason about when a single logical call is actually two.</li>
+      <li>Mobile and embedded clients often have stricter or non-configurable redirect-following behavior.</li>
+    </ul>
+    <p>Compare the three real options:</p>
+    <table>
+      <tr><th>Approach</th><th>What it is</th><th>Trade-off</th></tr>
+      <tr><td>API redirect (3xx)</td><td>Old endpoint returns a redirect to the new one</td><td>Simple to add, but breaks non-browser clients silently and adds latency to every call</td></tr>
+      <tr><td>API versioning</td><td><code>/v1/</code> and <code>/v2/</code> coexist; clients opt in explicitly</td><td>Most predictable; requires maintaining both versions during a deprecation window</td></tr>
+      <tr><td>Server-side routing</td><td>Gateway internally routes <code>/users</code> to whichever backend implementation is current</td><td>Zero client-visible change, but hides breaking changes that clients may need to know about</td></tr>
+    </table>
+    <p>When an endpoint is truly and permanently retired, 308 (method-preserving) is the least-bad redirect choice — but pairing it with clear deprecation headers (<code>Deprecation</code>, <code>Sunset</code>) and version negotiation is usually a better system than relying on 3xx as the migration mechanism itself.</p>
+  </section>
+
+  <!-- 17 -->
+  <section id="s17">
+    <h2><span class="num">17</span> Security Considerations</h2>
+    <table>
+      <tr><th>Issue</th><th>Concrete example</th></tr>
+      <tr><td>Open redirect</td><td><code>https://example.com/login?next=https://evil.com</code> — trusted domain, attacker-controlled destination.</td></tr>
+      <tr><td>HTTPS downgrade</td><td>A redirect chain that at any hop points back to <code>http://</code> reintroduces plaintext exposure even if the origin is HTTPS-only.</td></tr>
+      <tr><td>Redirect loops</td><td>Misconfigured HTTPS-enforcement behind a load balancer that itself terminates TLS, causing app-layer HTTP→HTTPS logic to loop forever.</td></tr>
+      <tr><td>Sensitive query parameters</td><td>A redirect that carries a token or session identifier in the URL can leak it via <code>Referer</code> headers or server logs at the destination.</td></tr>
+      <tr><td>Authorization headers</td><td>Cross-origin redirects often strip <code>Authorization</code>, silently downgrading an authenticated call to anonymous.</td></tr>
+      <tr><td>Cookie behavior</td><td>Cookies scoped to the original domain don't automatically apply after a cross-domain redirect — session state can appear to vanish.</td></tr>
+      <tr><td>Cross-origin redirects</td><td>Redirecting between origins changes CORS and same-site cookie semantics, sometimes breaking flows relying on implicit trust.</td></tr>
+      <tr><td>Phishing</td><td>Open redirects through a trusted brand domain are a recurring building block in phishing campaigns.</td></tr>
+      <tr><td>OAuth callback</td><td>An unvalidated or loosely-matched <code>redirect_uri</code> lets an attacker intercept authorization codes/tokens.</td></tr>
+    </table>
+    <p>Safe validation strategy for any user-influenced redirect target: only allow relative paths, or match the destination against an explicit allow-list of your own registered hosts — never pass an attacker-controlled absolute URL straight into <code>Location</code>.</p>
+  </section>
+
+  <!-- 18 -->
+  <section id="s18">
+    <h2><span class="num">18</span> Performance</h2>
+    <pre><code>Client → GET /old → 301 → GET /new → 200</code></pre>
+    <p>Every redirect hop adds a full request/response cycle — DNS resolution (if the new host differs and isn't already resolved), a new TCP/TLS handshake (if the connection can't be reused, e.g. cross-origin), and the round-trip time itself. On a mobile network with 100–300ms RTT, a single avoidable redirect hop can add a noticeable, user-visible delay before any content starts loading — and that cost is paid on <em>every</em> uncached hit.</p>
+    <p>Same-origin redirects reuse the existing TLS connection and pay only the RTT cost; cross-origin redirects pay DNS + TLS + RTT stacked. A CDN-cached (or browser-cached) 301 pays none of this after the first hit — which is the concrete performance argument for making permanent redirects cacheable rather than dynamically computed on every request.</p>
+  </section>
+
+  <!-- 19 -->
+  <section id="s19">
+    <h2><span class="num">19</span> Redirects and Distributed Systems</h2>
+    <pre><code>User → Global Traffic Manager → Region A
+                                    │
+                          (incident) │
+                                    ▼
+                                Region B</code></pre>
+    <p>Should a regional failover be implemented as an HTTP redirect? Generally <strong>no</strong>. An HTTP redirect requires the client to already have successfully reached Region A to be told to go to Region B — which is exactly backwards during an outage where Region A might be unreachable or slow in the first place. It also bakes a full extra round trip into every failover event, at the worst possible moment.</p>
+    <table>
+      <tr><th>Mechanism</th><th>Trade-off</th></tr>
+      <tr><td>HTTP redirect</td><td>Client-visible, cacheable, but requires reaching the failing region first — wrong tool for failover</td></tr>
+      <tr><td>DNS-based routing</td><td>Client-transparent, but bounded by DNS TTL — propagation can take minutes even with low TTLs</td></tr>
+      <tr><td>Anycast / CDN routing</td><td>Near-instant, network-layer rerouting with no client cooperation needed — best for latency-sensitive failover</td></tr>
+      <tr><td>Load-balancer routing</td><td>Fast within a region/data-center scope, but not inherently global</td></tr>
+    </table>
+    <p>Blue-green deployments, canary releases, and active-active traffic shifting belong at the routing/load-balancer layer for the same reason: they need to be invisible to the client and reversible in milliseconds, neither of which an HTTP redirect — a client-cooperative, potentially-cached, extra-round-trip mechanism — is built for.</p>
+  </section>
+
+  <!-- 20 -->
+  <section id="s20">
+    <h2><span class="num">20</span> Redirect vs DNS</h2>
+    <table>
+      <tr><th></th><th>HTTP 301/302</th><th>DNS routing (CNAME/weighted/geo)</th></tr>
+      <tr><td>Layer</td><td>Application layer (HTTP)</td><td>Name resolution, before any HTTP request is sent</td></tr>
+      <tr><td>Client involvement</td><td>Client must send a request, receive the redirect, send another</td><td>Client's resolver does the work transparently; app sees one request</td></tr>
+      <tr><td>Caching</td><td>Governed by <code>Cache-Control</code> on the redirect response</td><td>Governed by DNS TTL, resolver caches, OS caches</td></tr>
+      <tr><td>URL visibility</td><td>Visible — the address bar changes</td><td>Invisible — same URL resolves to a different IP</td></tr>
+      <tr><td>Failure handling</td><td>Origin must be reachable to issue the redirect at all</td><td>Can react to failures without the origin being reachable (health-checked routing)</td></tr>
+      <tr><td>Performance</td><td>Extra HTTP round trip</td><td>Extra resolution step, but often cheaper/faster and cacheable client-side</td></tr>
+    </table>
+    <p>Use an HTTP redirect when the <em>URL identity itself</em> has changed and you want that reflected to the user, search engines, and bookmarks. Use DNS-based (or anycast/CDN) routing when the URL should stay exactly the same but the underlying destination — region, data center, deployment — needs to change transparently.</p>
+  </section>
+
+  <!-- 21 -->
+  <section id="s21">
+    <h2><span class="num">21</span> Redirect Status Code Decision Framework</h2>
+    <pre><code>Do I need the URL to change for the client?
+        │
+       Yes ────────────────────────────────► No → use a rewrite, not a redirect
+        │
+Is the change permanent?
+        │
+   ┌────┴────┐
+  Yes         No
+   │           │
+Does the      Does the
+method need   method need
+to be         to be
+preserved?    preserved?
+   │           │
+ ┌─┴─┐       ┌─┴─┐
+Yes  No     Yes  No
+ │    │      │    │
+308  301    307  302 (or 303 to force GET after a POST)</code></pre>
+    <p>Reproducing this out loud in an interview: state the URL-change question first (rules out rewrite), then permanence (301/308 family vs 302/303/307 family), then method preservation (picks the exact code). That three-question sequence covers all five codes without memorizing a lookup table.</p>
+  </section>
+
+  <!-- 22 -->
+  <section id="s22">
+    <h2><span class="num">22</span> Troubleshooting Scenarios</h2>
+
+    <div class="incident">
+      <h4>Scenario 1 — Browsers keep hitting the old destination after the server config changed</h4>
+      <dl>
+        <dt>What happened</dt><dd>Users still land on the retired page days after the redirect target was updated.</dd>
+        <dt>Root cause</dt><dd>The original redirect was a 301 with a long/implicit cache lifetime; browsers cached the old mapping.</dd>
+        <dt>Misused code</dt><dd class="status-301">301 (cached too aggressively for a mapping that turned out to change)</dd>
+        <dt>Debug</dt><dd>Reproduce in an incognito window / with cache disabled; check <code>Cache-Control</code> on the original 301 response via browser devtools or curl -I.</dd>
+        <dt>Fix</dt><dd>Serve a fresh 301 to the correct destination; affected users self-heal once their local cache expires or is cleared — there's no server-side way to force it.</dd>
+        <dt>Prevent</dt><dd>Use bounded TTLs on permanent redirects until you're fully confident the mapping is final.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 2 — A POST unexpectedly becomes a GET after redirect</h4>
+      <dl>
+        <dt>What happened</dt><dd>A form submission's side effect doesn't happen; the destination page loads fine but the data wasn't saved.</dd>
+        <dt>Root cause</dt><dd>The redirect used 302, and the client (browser or HTTP library) coerced the method to GET per legacy convention, dropping the body.</dd>
+        <dt>Misused code</dt><dd class="status-302">302 (should have been 307, or 303 if a GET was actually intended)</dd>
+        <dt>Debug</dt><dd>Inspect the network tab for the redirected request's method; confirm the original was POST with a body.</dd>
+        <dt>Fix</dt><dd>Switch to 307 if the POST must be replayed as-is, or explicitly redesign as a POST/Redirect/GET (303) flow if the intent was always "show a result page."</dd>
+        <dt>Prevent</dt><dd>Never use 301/302 in front of non-idempotent writes; reserve them for GET-safe resources.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 3 — Redirect loop between HTTP and HTTPS</h4>
+      <dl>
+        <dt>What happened</dt><dd>Users see "too many redirects" errors.</dd>
+        <dt>Root cause</dt><dd>TLS is terminated at the load balancer, which forwards plaintext HTTP to the app; the app also enforces HTTPS and redirects, unaware the LB already handled it.</dd>
+        <dt>Misused code</dt><dd class="status-301">301 (correct code, wrong layer — duplicated logic)</dd>
+        <dt>Debug</dt><dd>Trace headers like <code>X-Forwarded-Proto</code> between LB and app; confirm the app is checking the wrong signal for "was this originally HTTPS."</dd>
+        <dt>Fix</dt><dd>Have the app trust <code>X-Forwarded-Proto</code> from a trusted LB instead of re-deriving scheme from the (already-downgraded) connection it received.</dd>
+        <dt>Prevent</dt><dd>Enforce HTTPS upgrade at exactly one layer, and document which layer owns it.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 4 — CDN keeps serving an old redirect</h4>
+      <dl>
+        <dt>What happened</dt><dd>Origin was updated, but edge nodes globally still return the stale destination.</dd>
+        <dt>Root cause</dt><dd>The redirect was cached at the edge with a long TTL and no invalidation was issued after the change.</dd>
+        <dt>Misused code</dt><dd class="status-301">301 (long TTL without an invalidation plan)</dd>
+        <dt>Debug</dt><dd>Compare response from origin directly (bypassing CDN) vs. through the CDN; check cache-status headers per edge POP.</dd>
+        <dt>Fix</dt><dd>Issue an explicit cache purge/invalidation across all edge nodes for the affected path.</dd>
+        <dt>Prevent</dt><dd>Bake invalidation into the redirect-change deploy process; don't rely solely on TTL expiry for corrections.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 5 — SEO traffic drops after a site migration</h4>
+      <dl>
+        <dt>What happened</dt><dd>Organic search traffic falls sharply in the weeks after a redesign/domain move.</dd>
+        <dt>Root cause</dt><dd>Migration used 302s (or no redirects at all) for URLs that were actually permanent moves, so link equity never transferred.</dd>
+        <dt>Misused code</dt><dd class="status-302">302 (should have been 301)</dd>
+        <dt>Debug</dt><dd>Crawl the old URL list and check response codes; confirm whether they 302, 404, or 301.</dd>
+        <dt>Fix</dt><dd>Convert the migration redirects to 301 and resubmit a sitemap to search engines.</dd>
+        <dt>Prevent</dt><dd>Treat "is this permanent" as the deciding question before any migration redirect ships, not an afterthought.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 6 — OAuth login redirects to an attacker-controlled domain</h4>
+      <dl>
+        <dt>What happened</dt><dd>Users report being sent to a phishing page that looks like the login provider.</dd>
+        <dt>Root cause</dt><dd>The <code>redirect_uri</code>/callback validation was prefix-matched or wildcarded, letting an attacker register a look-alike subpath.</dd>
+        <dt>Misused code</dt><dd class="status-302">302 (correct code, unvalidated destination)</dd>
+        <dt>Debug</dt><dd>Review the authorization server's redirect URI matching logic; look for wildcard or "starts with" matching instead of exact match.</dd>
+        <dt>Fix</dt><dd>Move to exact-match, pre-registered callback URLs only.</dd>
+        <dt>Prevent</dt><dd>Never allow wildcard or partial matching on OAuth redirect URIs, regardless of convenience during development.</dd>
+      </dl>
+    </div>
+
+    <div class="incident">
+      <h4>Scenario 7 — An API client fails after an endpoint starts returning redirects</h4>
+      <dl>
+        <dt>What happened</dt><dd>A backend service or SDK integration starts throwing errors or silently losing auth after an API endpoint was "helpfully" redirected to a new path.</dd>
+        <dt>Root cause</dt><dd>The client library doesn't follow redirects for non-GET requests by default, or strips the <code>Authorization</code> header across the (possibly cross-origin) hop.</dd>
+        <dt>Misused code</dt><dd>301/302 used as an API versioning strategy</dd>
+        <dt>Debug</dt><dd>Check the client library's redirect-following configuration and whether the failure correlates with non-GET calls specifically.</dd>
+        <dt>Fix</dt><dd>Support both old and new endpoints in parallel (real versioning) instead of relying on the client to follow a redirect correctly.</dd>
+        <dt>Prevent</dt><dd>Treat redirects as unsuitable for API contract changes; use explicit versioning and deprecation headers instead.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 23 -->
+  <section id="s23">
+    <h2><span class="num">23</span> 25 System Design Interview Questions</h2>
+
+    <details class="qa"><summary>1. What is HTTP 301?</summary><div class="body"><strong>Expected:</strong> A permanent redirect status telling the client the resource has a new, definitive URL. <strong>Testing:</strong> Basic protocol literacy. <strong>Common mistake:</strong> Describing it as "an error." <strong>Strong answer:</strong> Ties it to caching and SEO consequences, not just the definition.</div></details>
+
+    <details class="qa"><summary>2. What is HTTP 302?</summary><div class="body"><strong>Expected:</strong> A temporary redirect; the original URL remains canonical. <strong>Testing:</strong> Same as above, contrast with 301. <strong>Common mistake:</strong> Treating 301/302 as interchangeable. <strong>Strong answer:</strong> Notes the historical "Found" naming and the ambiguity around method handling.</div></details>
+
+    <details class="qa"><summary>3. What's the difference between 301 and 302?</summary><div class="body"><strong>Expected:</strong> Permanence, caching default, and SEO signal all differ. <strong>Testing:</strong> Whether the candidate sees beyond "one says permanent, one doesn't." <strong>Common mistake:</strong> Only mentioning SEO. <strong>Strong answer:</strong> Covers caching, client behavior, and SEO together, and flags the method-preservation ambiguity unprompted.</div></details>
+
+    <details class="qa"><summary>4. When would you use 301?</summary><div class="body"><strong>Expected:</strong> Domain migrations, HTTP→HTTPS, permanent URL restructuring. <strong>Testing:</strong> Practical judgment. <strong>Common mistake:</strong> Suggesting it for anything reversible. <strong>Strong answer:</strong> Flags the "hard to undo due to caching" risk.</div></details>
+
+    <details class="qa"><summary>5. When would you use 302?</summary><div class="body"><strong>Expected:</strong> A/B tests, campaigns, maintenance pages, login flows. <strong>Testing:</strong> Same as above, inverse case. <strong>Common mistake:</strong> Using it for a migration "just to be safe" — this actually breaks SEO transfer. <strong>Strong answer:</strong> Connects the choice to what should stay canonical.</div></details>
+
+    <details class="qa"><summary>6. What is 307?</summary><div class="body"><strong>Expected:</strong> A temporary redirect that guarantees method and body preservation. <strong>Testing:</strong> Depth beyond 301/302. <strong>Common mistake:</strong> Confusing it with 303. <strong>Strong answer:</strong> Gives a concrete POST example.</div></details>
+
+    <details class="qa"><summary>7. What is 308?</summary><div class="body"><strong>Expected:</strong> A permanent redirect that guarantees method and body preservation — the 301 analog to 307. <strong>Testing:</strong> Full 3xx family knowledge. <strong>Common mistake:</strong> Not realizing it exists. <strong>Strong answer:</strong> Applies it to API endpoint migrations specifically.</div></details>
+
+    <details class="qa"><summary>8. Why do 307/308 exist?</summary><div class="body"><strong>Expected:</strong> To remove the ambiguity that 301/302 inherited from inconsistent early browser behavior around method coercion. <strong>Testing:</strong> Historical/spec awareness. <strong>Common mistake:</strong> "Because more codes are better." <strong>Strong answer:</strong> Explains the POST→GET convention that motivated them.</div></details>
+
+    <details class="qa"><summary>9. What's the difference between redirect and rewrite?</summary><div class="body"><strong>Expected:</strong> Redirect changes the client-visible URL and costs a round trip; rewrite is invisible and internal, one round trip. <strong>Testing:</strong> Whether the candidate conflates client-visible vs server-internal behavior. <strong>Common mistake:</strong> Saying they're "basically the same." <strong>Strong answer:</strong> Gives an NGINX example of each.</div></details>
+
+    <details class="qa"><summary>10. Can redirects be cached?</summary><div class="body"><strong>Expected:</strong> Yes — 301 is heuristically cacheable by default, 302 is not without explicit headers. <strong>Testing:</strong> Cache-control literacy. <strong>Common mistake:</strong> Assuming neither is cached without explicit headers. <strong>Strong answer:</strong> Distinguishes browser cache from CDN/proxy cache.</div></details>
+
+    <details class="qa"><summary>11. How does CDN caching affect redirects?</summary><div class="body"><strong>Expected:</strong> Edge-cached redirects avoid hitting origin but require explicit invalidation to update, risking stale global state. <strong>Testing:</strong> Distributed caching trade-offs. <strong>Common mistake:</strong> Ignoring the invalidation-propagation delay. <strong>Strong answer:</strong> Distinguishes edge-generated vs origin-generated redirects.</div></details>
+
+    <details class="qa"><summary>12. Why are redirect chains bad?</summary><div class="body"><strong>Expected:</strong> Compounding latency, SEO crawl-budget waste, operational complexity. <strong>Testing:</strong> Performance awareness. <strong>Common mistake:</strong> Only mentioning SEO. <strong>Strong answer:</strong> Quantifies the added RTT and proposes flattening the redirect graph.</div></details>
+
+    <details class="qa"><summary>13. How would you implement HTTP → HTTPS?</summary><div class="body"><strong>Expected:</strong> 301 at the load balancer/CDN edge, not the application layer. <strong>Testing:</strong> Layer placement judgment. <strong>Common mistake:</strong> Implementing it in application code, adding unnecessary latency. <strong>Strong answer:</strong> Notes browsers can skip the HTTP hop entirely once cached.</div></details>
+
+    <details class="qa"><summary>14. How would you migrate millions of URLs?</summary><div class="body"><strong>Expected:</strong> Bulk 301 mapping table, likely served from the edge/CDN for scale, with bounded TTLs and sitemap resubmission. <strong>Testing:</strong> Scale thinking. <strong>Common mistake:</strong> Assuming per-URL manual redirect rules. <strong>Strong answer:</strong> Discusses a lookup-table-backed redirect service (see §24).</div></details>
+
+    <details class="qa"><summary>15. How would you avoid redirect loops?</summary><div class="body"><strong>Expected:</strong> Careful ownership of upgrade logic at a single layer, hop-count limits, and testing the redirect graph for cycles before deploy. <strong>Testing:</strong> Operational rigor. <strong>Common mistake:</strong> Relying solely on the browser's hop cap as the safety net. <strong>Strong answer:</strong> Ties it to the LB/app duplicated-logic failure mode from Scenario 3.</div></details>
+
+    <details class="qa"><summary>16. How do redirects affect API clients?</summary><div class="body"><strong>Expected:</strong> Inconsistent following behavior across SDKs, dropped auth headers cross-origin, extra latency, complicated retries. <strong>Testing:</strong> Non-browser client awareness. <strong>Common mistake:</strong> Assuming API clients behave like browsers. <strong>Strong answer:</strong> Recommends versioning over redirects for APIs.</div></details>
+
+    <details class="qa"><summary>17. How do redirects interact with POST?</summary><div class="body"><strong>Expected:</strong> 301/302 historically risk method coercion to GET; 307/308 guarantee preservation. <strong>Testing:</strong> The GET/POST trap from §4. <strong>Common mistake:</strong> Assuming POST always survives a redirect. <strong>Strong answer:</strong> Brings up idempotency keys as a complementary safeguard.</div></details>
+
+    <details class="qa"><summary>18. How do redirects affect OAuth?</summary><div class="body"><strong>Expected:</strong> They're the core transport for moving the browser between parties; callback URL validation is critical. <strong>Testing:</strong> Security-aware protocol knowledge. <strong>Common mistake:</strong> Not mentioning open-redirect/callback risk. <strong>Strong answer:</strong> Distinguishes browser redirects from the server-to-server token exchange.</div></details>
+
+    <details class="qa"><summary>19. How would you design a global redirect service?</summary><div class="body"><strong>Expected:</strong> See the full design in §24 — edge-cached lookup table, replicated storage, invalidation pipeline. <strong>Testing:</strong> End-to-end system design synthesis. <strong>Common mistake:</strong> Designing it as a single-region database lookup. <strong>Strong answer:</strong> Reasons explicitly about consistency vs latency trade-offs.</div></details>
+
+    <details class="qa"><summary>20. Where should redirects be generated in a large-scale architecture?</summary><div class="body"><strong>Expected:</strong> As close to the edge as the required logic allows — see the layer table in §11. <strong>Testing:</strong> Layered-architecture judgment. <strong>Common mistake:</strong> Defaulting to "always in the application." <strong>Strong answer:</strong> Matches each redirect type to the cheapest layer capable of deciding it.</div></details>
+
+    <details class="qa"><summary>21. Should DNS or HTTP redirects handle regional failover?</summary><div class="body"><strong>Expected:</strong> DNS/anycast routing — HTTP redirects require reaching the failing region first. <strong>Testing:</strong> Failure-mode reasoning under distributed systems. <strong>Common mistake:</strong> Proposing an HTTP redirect for failover. <strong>Strong answer:</strong> Explains the chicken-and-egg problem explicitly.</div></details>
+
+    <details class="qa"><summary>22. What's an open redirect and why is it dangerous?</summary><div class="body"><strong>Expected:</strong> A redirect target influenced by user input without validation, enabling phishing via a trusted domain. <strong>Testing:</strong> Security fundamentals. <strong>Common mistake:</strong> Underestimating the impact ("it's just a redirect"). <strong>Strong answer:</strong> Proposes an allow-list/relative-path-only fix.</div></details>
+
+    <details class="qa"><summary>23. Why shouldn't APIs rely on redirects for versioning?</summary><div class="body"><strong>Expected:</strong> Inconsistent client behavior, dropped headers, added latency, complicated observability. <strong>Testing:</strong> API design maturity. <strong>Common mistake:</strong> Treating it as equivalent to browser navigation. <strong>Strong answer:</strong> Proposes explicit versioning + deprecation headers instead.</div></details>
+
+    <details class="qa"><summary>24. How would you debug "too many redirects"?</summary><div class="body"><strong>Expected:</strong> Trace the actual chain (curl -I in a loop, or browser devtools), look for duplicated upgrade logic across layers. <strong>Testing:</strong> Practical debugging skill. <strong>Common mistake:</strong> Guessing without tracing the real header chain. <strong>Strong answer:</strong> References the TLS-termination-at-LB failure mode.</div></details>
+
+    <details class="qa"><summary>25. How would you estimate capacity for a redirect service handling billions of requests/day?</summary><div class="body"><strong>Expected:</strong> Back-of-envelope QPS, cache-hit-ratio-adjusted origin load, storage/replication needs — see §25. <strong>Testing:</strong> Estimation rigor. <strong>Common mistake:</strong> Skipping peak-to-average ratios. <strong>Strong answer:</strong> Shows the math, not just a final number.</div></details>
+  </section>
+
+  <!-- 24 -->
+  <section id="s24">
+    <h2><span class="num">24</span> Design a Large-Scale Redirect Service</h2>
+    <p><em>"Design a globally distributed URL redirect service capable of handling billions of redirects per day."</em></p>
+    <pre><code>Requirements → Traffic estimation → Data model → Storage → Caching →
+CDN → Routing → Redirect lookup → Consistency → Replication →
+Cache invalidation → Failure handling → Monitoring → Scaling</code></pre>
+    <h3>Requirements</h3>
+    <ul>
+      <li>Billions of requests/day, global user base, sub-50ms redirect latency at p99.</li>
+      <li>Support both permanent (301/308) and temporary (302/307) mappings, plus custom domains for tenants.</li>
+      <li>Per-tenant redirect rules, click analytics, and abuse prevention (malicious/spam destinations).</li>
+    </ul>
+    <h3>Data model</h3>
+    <pre><code>redirect {
+  short_key       : string (partition key)
+  destination_url : string
+  status_code     : int (301|302|307|308)
+  owner_id        : string
+  created_at, expires_at (nullable)
+  active          : bool
+}</code></pre>
+    <h3>Storage</h3>
+    <p>A key-value store keyed by <code>short_key</code> (e.g. a partitioned/replicated KV store) is the natural fit — lookups are single-key, read-heavy, and don't need relational joins. Write volume (new/updated redirects) is orders of magnitude lower than read volume (redirect resolution), so the system should be optimized aggressively for reads.</p>
+    <h3>Caching &amp; CDN</h3>
+    <p>Put a CDN edge cache in front of the lookup, keyed by <code>short_key</code>, with TTL matching the redirect's own permanence: long TTL (or edge-computed, e.g. Workers/Lambda@Edge) for 301/308, short-or-no-cache for 302/307. This is where the overwhelming majority of the "billions/day" traffic gets absorbed without ever reaching the origin KV store.</p>
+    <h3>Routing</h3>
+    <pre><code>GET https://example.com/abc
+      │
+      ▼
+CDN edge: cache hit? ── yes ──► 301 Location: https://newsite.com/page  (done, ~ms)
+      │ no
+      ▼
+Origin lookup service → KV store fetch by "abc"
+      │
+      ▼
+Build 301/302 response, populate edge cache per TTL policy
+      │
+      ▼
+301/302 Location: https://newsite.com/page</code></pre>
+    <h3>Consistency &amp; replication</h3>
+    <p>Redirect mappings are a good fit for <strong>eventual consistency</strong> — a few seconds of staleness after a rule update is an acceptable trade for global low-latency reads. Multi-region replication of the KV store (active-active, async replication) keeps reads local to each region; writes propagate asynchronously and get pulled into each region's local cache/store.</p>
+    <h3>Cache invalidation</h3>
+    <p>On update, invalidate the specific <code>short_key</code> at all CDN edges (targeted purge, not a full flush) and let regional KV replicas converge on their normal replication lag. Because 301s are expected to be long-cached by clients as well, treat any change to an existing permanent mapping as an exceptional, audited operation.</p>
+    <h3>Failure handling</h3>
+    <p>If the origin lookup service is unreachable and the edge has no cached entry, fail toward a safe default (a branded "link not found" page) rather than a 5xx that a client might interpret as retriable in a way that hammers the origin.</p>
+  </section>
+
+  <!-- 25 -->
+  <section id="s25">
+    <h2><span class="num">25</span> Capacity Estimation</h2>
+    <p>Assume <strong>5 billion redirects/day</strong> as the target scale.</p>
+    <pre><code>Average QPS   = 5,000,000,000 / 86,400 ≈ 58,000 req/s
+Peak QPS      = average × peak factor (assume 4×) ≈ 230,000 req/s
+
+Storage:
+  Assume 500M active short_key → destination mappings
+  ~300 bytes/record (key + URL + metadata)
+  500,000,000 × 300B ≈ 150 GB raw
+  ×3 replication factor ≈ 450 GB total
+
+Cache:
+  Hot-set assumption: 5% of keys drive 80% of traffic (Pareto)
+  25M keys × 300B ≈ 7.5 GB per edge cache — comfortably fits in-memory
+
+Bandwidth:
+  Response size ≈ 300 bytes (headers + empty body)
+  230,000 req/s × 300B ≈ 69 MB/s at peak — trivially small per edge node
+
+Origin load (after CDN absorption):
+  Assume 95% edge cache hit ratio → 5% falls through to origin
+  230,000 × 0.05 ≈ 11,500 req/s to the origin lookup service at peak
+
+Servers (origin lookup tier):
+  Assume 2,000 req/s per instance sustainable
+  11,500 / 2,000 ≈ 6 instances minimum, provision ~3× for redundancy/headroom ≈ 18</code></pre>
+    <p>The headline takeaway: with a well-tuned edge cache hit ratio, the origin tier handles a small fraction of nominal "billions/day" traffic — the design problem is really "build a cache-friendly, highly-cacheable redirect layer," not "build a KV store that can do 230K QPS directly."</p>
+  </section>
+
+  <!-- 26 -->
+  <section id="s26">
+    <h2><span class="num">26</span> Observability</h2>
+    <p>Metrics worth alerting on, not just graphing:</p>
+    <ul>
+      <li>Redirect QPS, broken down by status code (301/302/303/307/308 rates) — a sudden shift in the ratio often signals a misconfiguration.</li>
+      <li>Redirect latency (p50/p95/p99), separated by cache hit vs origin fallthrough.</li>
+      <li>Redirect error rate (destination returns 4xx/5xx, or the redirect itself fails to resolve).</li>
+      <li>Detected redirect loops/excessive chain length.</li>
+      <li>CDN/edge cache hit ratio for redirect lookups specifically.</li>
+      <li>Destination failure rate — the new URL itself becoming unreachable.</li>
+    </ul>
+    <p>Structured log fields per redirect event:</p>
+    <pre><code>{
+  "source_url": "...", "destination_url": "...",
+  "status_code": 301, "timestamp": "...",
+  "region": "ap-south-1", "user_agent": "...",
+  "referrer": "...", "request_id": "..."
+}</code></pre>
+    <div class="callout">
+      <div class="label">PRIVACY &amp; CARDINALITY</div>
+      <p>Full URLs, referrers, and user agents are high-cardinality and can carry personally identifiable or sensitive data (session tokens embedded in query strings, for instance) — hash or truncate sensitive fields before long-term storage, apply retention limits, and be deliberate about which fields feed low-cardinality dashboards (status code, region) versus which stay in short-retention raw logs (full URL, request ID) for incident debugging only.</p>
+    </div>
+  </section>
+
+  <!-- 27 -->
+  <section id="s27">
+    <h2><span class="num">27</span> 15 Common Interview Mistakes</h2>
+    <ol class="mistake-list">
+      <li>Treating 301 and 302 as interchangeable.<span class="why">They differ in caching default, SEO transfer, and client memory — picking the wrong one is a one-way door in production.</span></li>
+      <li>Ignoring HTTP method semantics.<span class="why">301/302 don't guarantee method preservation; assuming a POST survives can silently break or duplicate writes.</span></li>
+      <li>Forgetting caching entirely.<span class="why">A 301 without a TTL plan is effectively permanent in practice, regardless of server-side intent.</span></li>
+      <li>Ignoring browser behavior.<span class="why">Browsers can skip the origin entirely after caching a 301 — "fixing the server" doesn't always fix the client.</span></li>
+      <li>Using redirects where internal routing/rewrite is better.<span class="why">Adds an unnecessary client-visible round trip for something that should be invisible.</span></li>
+      <li>Using HTTP redirects for DNS-level routing problems.<span class="why">Failover and geo-routing need to work before the origin is reachable — redirects can't do that.</span></li>
+      <li>Ignoring redirect chains.<span class="why">Each hop compounds latency and complicates crawling; chains should be flattened, not layered.</span></li>
+      <li>Ignoring redirect loops.<span class="why">Usually caused by duplicated upgrade logic across layers (e.g. LB and app both enforcing HTTPS).</span></li>
+      <li>Ignoring OAuth callback security.<span class="why">Loose redirect URI matching is a direct path to token/code theft.</span></li>
+      <li>Assuming all API clients behave like browsers.<span class="why">SDKs, mobile clients, and server-to-server calls often don't follow redirects the way a browser does.</span></li>
+      <li>Ignoring CDN caching.<span class="why">Edge-cached redirects require explicit invalidation — TTL expiry alone isn't a fix plan.</span></li>
+      <li>Using 301 for something temporary.<span class="why">Caches and search engines may adopt it as permanent long after you've reverted the server.</span></li>
+      <li>Using 302 for a permanent migration.<span class="why">Link equity and indexing never transfer, quietly capping the new URL's organic traffic.</span></li>
+      <li>Ignoring 307/308.<span class="why">Missing the method-preservation guarantee they provide is the single most common gap in an otherwise solid answer.</span></li>
+      <li>Forgetting the additional network round trip.<span class="why">Every redirect hop is real, measurable latency — not a free abstraction.</span></li>
+    </ol>
+  </section>
+
+  <!-- 28 -->
+  <section id="s28">
+    <h2><span class="num">28</span> Final Cheat Sheet</h2>
+    <div class="cheat">
+      <h3>Status codes</h3>
+      <div class="rule"><span class="q">301</span><span class="a">Moved Permanently — method not guaranteed</span></div>
+      <div class="rule"><span class="q">302</span><span class="a">Found (temporary) — method not guaranteed</span></div>
+      <div class="rule"><span class="q">303</span><span class="a">See Other — forces GET (PRG pattern)</span></div>
+      <div class="rule"><span class="q">307</span><span class="a">Temporary Redirect — method guaranteed</span></div>
+      <div class="rule"><span class="q">308</span><span class="a">Permanent Redirect — method guaranteed</span></div>
+      <h3 style="margin-top:26px;">Key rule</h3>
+      <div class="rule"><span class="q">Permanent + URL should change</span><span class="a">301 (or 308)</span></div>
+      <div class="rule"><span class="q">Temporary + URL should change</span><span class="a">302 (or 307)</span></div>
+      <div class="rule"><span class="q">POST + must preserve method</span><span class="a">307</span></div>
+      <div class="rule"><span class="q">Permanent + must preserve method</span><span class="a">308</span></div>
+      <div class="rule"><span class="q">POST/Redirect/GET pattern</span><span class="a">303</span></div>
+      <h3 style="margin-top:26px;">Redirect vs rewrite</h3>
+      <div class="rule"><span class="q">Redirect</span><span class="a">New client request, URL visibly changes</span></div>
+      <div class="rule"><span class="q">Rewrite</span><span class="a">Server-internal, URL stays the same, one request</span></div>
+      <h3 style="margin-top:26px;">Interview mental model</h3>
+      <div class="rule"><span class="q">Intent</span><span class="a">→ Permanent vs Temporary</span></div>
+      <div class="rule"><span class="q">→ HTTP method</span><span class="a">→ Client behavior</span></div>
+      <div class="rule"><span class="q">→ Caching</span><span class="a">→ SEO</span></div>
+      <div class="rule"><span class="q">→ Security</span><span class="a">→ Infrastructure → Performance</span></div>
+    </div>
+
+    <div class="summary-box" style="margin-top:28px;">
+      <h3>The 60-second answer</h3>
+      <p>"301 means the resource permanently moved — browsers and CDNs can cache that mapping and skip the old URL entirely, and search engines transfer ranking signal to the new URL. 302 means it's temporary — the original URL stays canonical, and nothing downstream is supposed to treat the new location as permanent. Neither code, historically, guarantees the request method survives the hop — many clients coerce POST into GET — which is why 307 and 308 exist: they're the method-preserving versions of 302 and 301 respectively. In system design terms, I pick 301/308 for actual permanent moves like domain migrations or HTTP-to-HTTPS, 302/307/303 for anything contextual or reversible like A/B tests or login flows, and I push the decision as far toward the edge — CDN or load balancer — as the required logic allows, since caching a redirect there is what lets it scale to billions of requests without the origin ever seeing most of the traffic."</p>
+      <p style="margin-bottom:0;"><span class="badge">301 = permanent</span><span class="badge">302 = temporary</span><span class="badge">308/307 = method-safe</span><span class="badge">303 = PRG</span></p>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<footer>301 vs 302 Field Manual — built for system design interview prep.</footer>
+
+<script>
+  // Active TOC highlighting on scroll
+  const sections = document.querySelectorAll('main section');
+  const links = document.querySelectorAll('nav.toc a');
+  const map = {};
+  links.forEach(l => map[l.getAttribute('href').slice(1)] = l);
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const id = entry.target.getAttribute('id');
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        if (map[id]) map[id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
