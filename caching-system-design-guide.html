@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caching — System Design Interview Guide</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --surface: #ffffff;
+    --ink: #1f2320;
+    --muted: #5b6460;
+    --accent: #b5502e;
+    --accent-soft: #f2e4dd;
+    --line: #e4e0d8;
+    --code-bg: #2c2a26;
+    --code-ink: #f1ece2;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 16px;
+  }
+
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 56px 28px 120px;
+  }
+
+  .masthead {
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 22px;
+    margin-bottom: 40px;
+  }
+
+  .kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 12.5px;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .masthead h1 {
+    font-family: var(--serif);
+    font-size: 2.5rem;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead p.sub {
+    color: var(--muted);
+    font-size: 1.05rem;
+    margin: 0;
+    max-width: 60ch;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--serif);
+    color: var(--ink);
+    scroll-margin-top: 24px;
+  }
+
+  h1 { display:none; } /* the doc's single H1 is replaced by masthead */
+
+  h2 {
+    font-size: 1.55rem;
+    margin-top: 3.2em;
+    padding-top: 0.6em;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  h3 {
+    font-size: 1.18rem;
+    margin-top: 2.2em;
+    color: var(--accent);
+  }
+
+  h4 {
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-top: 1.8em;
+  }
+
+  p { margin: 1em 0; }
+
+  strong { color: var(--ink); font-weight: 700; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+  a:hover { border-bottom-color: var(--accent); }
+
+  ul, ol { padding-left: 1.4em; margin: 1em 0; }
+  li { margin: 0.4em 0; }
+  li > ul, li > ol { margin: 0.4em 0; }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 3em 0;
+  }
+
+  code {
+    font-family: var(--mono);
+    background: var(--accent-soft);
+    color: #7a3418;
+    padding: 0.12em 0.4em;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 18px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 0.87rem;
+    line-height: 1.55;
+    margin: 1.4em 0;
+  }
+
+  pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    font-size: 1em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.6em 0;
+    font-size: 0.93rem;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  thead th {
+    background: var(--ink);
+    color: #fff;
+    text-align: left;
+    font-weight: 600;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #faf7f2; }
+
+  .toc-box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 3em;
+  }
+  .toc-box .toc-title {
+    font-family: var(--sans);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .toc-box ul {
+    columns: 2;
+    -webkit-columns: 2;
+    column-gap: 32px;
+    list-style: none;
+    padding-left: 0;
+    font-size: 0.92rem;
+  }
+  .toc-box li { margin: 0.3em 0; break-inside: avoid; }
+  .toc-box a { border-bottom: none; color: var(--ink); }
+  .toc-box a:hover { color: var(--accent); }
+
+  footer {
+    margin-top: 5em;
+    padding-top: 1.5em;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .masthead h1 { font-size: 1.9rem; }
+    .toc-box ul { columns: 1; }
+    .page { padding: 32px 18px 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="masthead">
+    <div class="kicker">System Design Interview Prep</div>
+    <h1>Caching: Mechanisms, Technologies &amp; When to Use Each</h1>
+    <p class="sub">A complete reference for reasoning through caching decisions in a system design interview — from fundamentals to a memorizable decision tree.</p>
+  </div>
+
+  <div class="toc-box">
+    <div class="toc-title">Contents</div>
+    <ul>
+      <li><a href="#1-caching-fundamentals">1. Caching Fundamentals</a></li>
+      <li><a href="#2-where-caching-happens-cache-locations">2. Where Caching Happens</a></li>
+      <li><a href="#3-cache-technologies">3. Cache Technologies</a></li>
+      <li><a href="#4-caching-patterns-mechanisms">4. Caching Patterns</a></li>
+      <li><a href="#5-cache-eviction-policies">5. Eviction Policies</a></li>
+      <li><a href="#6-cache-invalidation-strategies">6. Invalidation Strategies</a></li>
+      <li><a href="#7-cache-stampede-thundering-herd">7. Cache Stampede</a></li>
+      <li><a href="#8-cache-penetration">8. Cache Penetration</a></li>
+      <li><a href="#9-cache-avalanche">9. Cache Avalanche</a></li>
+      <li><a href="#10-hot-keys">10. Hot Keys</a></li>
+      <li><a href="#11-local-cache-vs-distributed-cache-comparison">11. Local vs Distributed</a></li>
+      <li><a href="#12-redis-vs-memcached-vs-caffeine-vs-cdn-master-table">12. Master Comparison Table</a></li>
+      <li><a href="#13-multi-level-caching">13. Multi-Level Caching</a></li>
+      <li><a href="#14-system-design-examples">14. System Design Examples</a></li>
+      <li><a href="#15-decision-framework-if-i-need">15. Decision Framework</a></li>
+      <li><a href="#16-cache-failure-scenarios">16. Failure Scenarios</a></li>
+      <li><a href="#17-system-design-calculations">17. Calculations</a></li>
+      <li><a href="#18-common-interview-mistakes">18. Common Mistakes</a></li>
+      <li><a href="#19-practice-interview-questions-25">19. Practice Questions</a></li>
+      <li><a href="#20-final-cheat-sheet">20. Final Cheat Sheet</a></li>
+    </ul>
+  </div>
+
+<h1 id="caching-for-system-design-interviews-complete-guide">Caching for System Design Interviews — Complete Guide</h1>
+<p>Before anything else, lock in one mental model. These four things are <strong>not</strong> competitors — they answer different questions:</p>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Answer category</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>Where</em> does caching happen?</td>
+<td><strong>Cache location</strong></td>
+<td>Browser, CDN, reverse proxy, app-local, distributed, DB</td>
+</tr>
+<tr>
+<td><em>What tool</em> implements it?</td>
+<td><strong>Cache technology</strong></td>
+<td>Redis, Memcached, Caffeine, Cloudflare, Varnish</td>
+</tr>
+<tr>
+<td><em>How</em> does the app talk to the cache?</td>
+<td><strong>Caching pattern / mechanism</strong></td>
+<td>Cache-aside, read-through, write-through, write-back</td>
+</tr>
+<tr>
+<td><em>When</em> do entries leave?</td>
+<td><strong>Eviction / invalidation strategy</strong></td>
+<td>LRU, LFU, TTL, event-driven invalidation</td>
+</tr>
+</tbody>
+</table>
+<p>An interviewer is testing whether you can compose these four independently. "Redis vs LRU" is a nonsense comparison (technology vs eviction policy). "CDN vs cache-aside" is a nonsense comparison (location vs pattern). Keep them in separate mental buckets throughout.</p>
+<hr />
+<h2 id="1-caching-fundamentals">1. Caching Fundamentals</h2>
+<p><strong>What is a cache?</strong> A small, fast storage layer that sits between a consumer and a slower source of truth, holding copies of data so repeat access is cheap.</p>
+<p><strong>Why cache?</strong>
+- Reduce latency (memory access ~100ns vs disk/DB round trip ~1–10ms+)
+- Reduce load on the source of truth (database, upstream service)
+- Reduce cost (fewer expensive compute/DB operations, less bandwidth)
+- Improve availability (serve stale-but-available data when the source is down)</p>
+<p><strong>Core vocabulary</strong>
+- <strong>Cache hit</strong>: requested data found in cache.
+- <strong>Cache miss</strong>: not found; must fetch from source.
+- <strong>Hit ratio</strong>: hits / (hits + misses). The single most important cache health metric.
+- <strong>Cache latency</strong>: time to read/write the cache itself (should be far lower than the source).
+- <strong>Cache capacity</strong>: how much data fits (RAM-bound, forces eviction decisions).
+- <strong>TTL (time to live)</strong>: how long an entry is considered valid before automatic expiry.
+- <strong>Cache invalidation</strong>: deliberately removing/updating an entry before its TTL, because the source changed.
+- <strong>Freshness vs performance</strong>: the central tension in every caching design — longer TTL = more speed and DB protection, but more risk of stale data.
+- <strong>Why caching reduces DB load</strong>: every hit is a request the DB never sees; at scale, a 10-point improvement in hit ratio can remove millions of DB queries a day (see Section 17 math).</p>
+<p><strong>Basic flow</strong></p>
+<pre><code>Client → API Server → Cache → Database
+</code></pre>
+<ul>
+<li><strong>Cache hit</strong>: API server checks cache, finds data, returns immediately. DB untouched.</li>
+<li><strong>Cache miss</strong>: API server checks cache, nothing there, queries DB, returns result to client, and (in cache-aside) writes result into cache for next time.</li>
+<li><strong>Cache failure</strong>: cache is down/unreachable. Well-designed systems <strong>fail open</strong> to the DB (slower, but system stays up) rather than <strong>fail closed</strong> (return errors). More on this in Section 16.</li>
+</ul>
+<hr />
+<h2 id="2-where-caching-happens-cache-locations">2. Where Caching Happens (Cache Locations)</h2>
+<p>Think of this as a pipeline from the user's browser to the disk. Caching can be inserted at almost every hop, and each layer caches a <em>different kind</em> of data for a <em>different reason</em>.</p>
+<h3 id="client-side-browser-cache">Client-side / Browser cache</h3>
+<ul>
+<li>HTTP caching via <code>Cache-Control</code>, <code>ETag</code>, <code>Last-Modified</code> headers — browser stores static assets, avoids re-downloading.</li>
+<li>LocalStorage/SessionStorage — app-controlled key-value storage in the browser, useful for user preferences, draft form state, auth tokens (with care), not for shared/sensitive data.</li>
+<li>Fastest possible cache — zero network hop — but only benefits a single user's single device.</li>
+</ul>
+<h3 id="cdn-edge-cache">CDN / Edge cache</h3>
+<p>Examples: Cloudflare, Amazon CloudFront, Fastly.
+- Caches content geographically close to the user, at edge points of presence.
+- Best for: static assets (images, video, CSS/JS, fonts), and increasingly cacheable API responses (public, non-personalized, e.g., a product catalog page).
+- Not suitable for: personalized or highly dynamic data (a user's private dashboard), unless carefully scoped per-user with cache keys.</p>
+<h3 id="reverse-proxy-cache">Reverse proxy cache</h3>
+<p>Examples: NGINX, Varnish.
+- Sits in front of the application servers, inside your infrastructure (not geographically distributed like a CDN).
+- Caches full HTTP responses close to your compute, cutting out application/DB work for identical requests.
+- Fits between load balancer and app servers:</p>
+<pre><code>Client → NGINX/Varnish → Application → Database
+</code></pre>
+<ul>
+<li>Useful when many requests are identical and cacheable at the HTTP level (e.g., public blog pages, category listings) without needing global edge distribution.</li>
+</ul>
+<h3 id="application-local-in-process-cache">Application / local (in-process) cache</h3>
+<p>Examples: Caffeine (Java), Guava Cache, Ehcache.
+- Lives in the memory of a single application instance.
+- Extremely fast (no network hop at all — nanoseconds).
+- <strong>Use local cache when</strong>: data is read very frequently, is small, tolerates slight staleness across instances, and per-instance duplication is acceptable (e.g., feature flags, config, small reference/lookup tables, compiled regex, rarely-changing metadata).
+- <strong>Downside</strong>: if you have N app servers, you have N independent copies — no shared state, and invalidating one instance's cache doesn't invalidate the others (see Section 2's Caffeine problem below).</p>
+<h3 id="distributed-cache">Distributed cache</h3>
+<p>Examples: Redis, Memcached, Amazon ElastiCache, Amazon MemoryDB, Google Cloud Memorystore, Azure Cache for Redis.
+- A separate, shared service that all app instances talk to over the network.
+- One copy of the data, visible to every app server — solves the "10 servers, 10 different answers" consistency problem that local caches have.
+- Costs a network round trip (still far faster than DB), but buys consistency and much larger effective capacity (scales independently of app servers).</p>
+<h3 id="database-level-caching">Database-level caching</h3>
+<ul>
+<li><strong>Query/result caching</strong>: DB caches results of repeated queries (mostly deprecated in modern MySQL/Postgres in favor of external caches, because invalidation on writes is hard to get right).</li>
+<li><strong>Buffer/page cache</strong>: DB engine caches disk pages in memory (e.g., Postgres shared_buffers, InnoDB buffer pool) — this is about speeding up the DB's <em>own</em> I/O, not about serving your application layer.</li>
+<li><strong>Prepared statement caching</strong>: DB/driver caches compiled query plans, so repeated queries with different parameters skip re-parsing/re-planning.</li>
+<li><strong>Read replicas vs caching</strong>: replicas scale <em>read throughput</em> by adding more DB instances that serve the same authoritative data (still doing real queries, same schema, same consistency model). A cache scales by <em>avoiding the DB entirely</em> for repeat reads, trading some freshness for speed. They solve different problems and are often used together.</li>
+</ul>
+<p><strong>Why DB cache ≠ application cache</strong>: A DB cache only ever holds what the DB engine decides is useful, is invisible to your application code, and disappears if the DB restarts or the query changes shape at all. An application cache is deliberately populated and shaped by your code around your actual access patterns (e.g., an assembled JSON blob of "user profile + their last 5 orders" — something no DB buffer cache would ever produce as a single unit).</p>
+<hr />
+<h2 id="3-cache-technologies">3. Cache Technologies</h2>
+<h3 id="redis">Redis</h3>
+<p><strong>What it is</strong>: An in-memory, network-accessible data structure server. Single-threaded execution model per core (with I/O threading in newer versions), extremely fast, and rich beyond simple key-value.</p>
+<p><strong>Architecture &amp; operational features</strong>
+- <strong>In-memory</strong>: data lives in RAM; that's the source of its speed and its capacity ceiling.
+- <strong>Persistence</strong> (optional): RDB (periodic snapshots) and/or AOF (append-only log of writes) let Redis survive restarts — this is what differentiates it from Memcached.
+- <strong>Replication</strong>: primary-replica async replication for read scaling and failover.
+- <strong>High availability</strong>: Redis Sentinel monitors primaries and promotes a replica on failure.
+- <strong>Redis Cluster</strong>: shards data across multiple nodes using hash slots (16384 slots), giving horizontal scalability beyond one machine's RAM.
+- <strong>Sharding</strong>: either client-side, via Cluster, or via a proxy (e.g., Twemproxy) — spreads keys across nodes.
+- <strong>Pub/Sub</strong>: lightweight messaging between clients — not a durable queue, just fire-and-forget broadcast.
+- <strong>Streams</strong>: an append-only log data type (<code>XADD</code>/<code>XREAD</code>) that <em>does</em> support consumer groups and replay — closer to a lightweight Kafka than Pub/Sub.
+- <strong>Lua scripting</strong>: atomic multi-step server-side scripts.
+- <strong>Transactions</strong> (<code>MULTI</code>/<code>EXEC</code>): queue commands and execute atomically (optimistic, via <code>WATCH</code>).
+- <strong>TTL</strong>: per-key expiration, <code>EXPIRE</code>/<code>PEXPIRE</code>.
+- <strong>Eviction policies</strong>: configurable (<code>noeviction</code>, <code>allkeys-lru</code>, <code>volatile-lru</code>, <code>allkeys-lfu</code>, <code>volatile-ttl</code>, <code>allkeys-random</code>, etc.) for when memory fills up.</p>
+<p><strong>Data structures and practical use cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>Structure</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>String</td>
+<td>Simple key-value: cached API response body, session token → user ID</td>
+</tr>
+<tr>
+<td>Hash</td>
+<td>Object-like data: a user profile or session with multiple fields, updated field-by-field without re-serializing the whole object</td>
+</tr>
+<tr>
+<td>List</td>
+<td>Ordered sequence: recent activity feed, simple queue (though Streams/dedicated queues are usually better for real queueing)</td>
+</tr>
+<tr>
+<td>Set</td>
+<td>Unique membership: unique visitor IDs, tag sets, "has this user already voted"</td>
+</tr>
+<tr>
+<td>Sorted Set (ZSet)</td>
+<td>Ranked data: leaderboards, rate-limiter sliding windows, priority queues, "top N trending"</td>
+</tr>
+<tr>
+<td>Bitmap</td>
+<td>Compact boolean flags at scale: daily active user tracking (1 bit per user per day)</td>
+</tr>
+<tr>
+<td>HyperLogLog</td>
+<td>Approximate distinct counts at fixed tiny memory: "how many unique visitors today" without storing every ID</td>
+</tr>
+<tr>
+<td>Stream</td>
+<td>Ordered, replayable event log with consumer groups: activity/event pipelines, lightweight message queue</td>
+</tr>
+</tbody>
+</table>
+<p><strong>When Redis is a good choice</strong>: you need more than plain key-value (ranking, counting, atomic operations), you need durability options, you need pub/sub or lightweight streaming, or you need a single technology to cover several caching sub-problems at once.</p>
+<p><strong>When Redis is overkill</strong>: you just need dead-simple, massively-parallel key-value caching with no persistence and no data structure needs — the operational simplicity of Memcached may beat Redis's extra feature surface.</p>
+<h3 id="memcached">Memcached</h3>
+<p><strong>What it is</strong>: A purely in-memory, multi-threaded, distributed key-value store built <em>only</em> to cache. No persistence, no data structures, no replication, no clustering logic built in — deliberately minimal.</p>
+<ul>
+<li><strong>Simple key-value only</strong>: get/set/delete on byte strings (typically ≤1MB values).</li>
+<li><strong>Distributed architecture</strong>: sharding logic lives in the <em>client</em> (consistent hashing across a list of servers) — the servers themselves don't know about each other.</li>
+<li><strong>Memory usage</strong>: slab allocator, generally very memory-efficient for uniform small object sizes.</li>
+<li><strong>No persistence</strong>: a restart wipes everything — this is a deliberate design choice (its only job is fast, disposable caching).</li>
+<li><strong>No complex data structures</strong>: no lists, sets, sorted sets.</li>
+<li><strong>Horizontal scaling</strong>: just add nodes and update the client's hash ring; each node is independent.</li>
+<li><strong>Eviction</strong>: LRU (approximate), per-slab.</li>
+<li><strong>Multi-node behavior</strong>: no node communicates with any other node — no cluster protocol, no coordination, no single point of failure at the protocol level. This is <em>simpler</em> than Redis Cluster but also means the client fully owns the sharding logic.</li>
+<li><strong>Multi-threaded</strong>: can use multiple CPU cores natively, which historically gave it an edge in raw throughput for simple GET/SET workloads on multi-core boxes (Redis has narrowed this gap with I/O threading, but the simplicity story still stands).</li>
+</ul>
+<h3 id="redis-vs-memcached">Redis vs Memcached</h3>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Redis</th>
+<th>Memcached</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data structures</td>
+<td>Rich (string, hash, list, set, zset, bitmap, HLL, stream)</td>
+<td>Key-value only</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Optional (RDB/AOF)</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Replication</td>
+<td>Built-in primary-replica</td>
+<td>None (roll your own)</td>
+</tr>
+<tr>
+<td>High availability</td>
+<td>Sentinel / Cluster</td>
+<td>Client-side only, no built-in HA</td>
+</tr>
+<tr>
+<td>Clustering</td>
+<td>Native (Redis Cluster)</td>
+<td>Client-side sharding only</td>
+</tr>
+<tr>
+<td>Scalability</td>
+<td>Horizontal via Cluster</td>
+<td>Horizontal, very simple (add nodes)</td>
+</tr>
+<tr>
+<td>Raw throughput (simple GET/SET)</td>
+<td>Very high</td>
+<td>Historically higher on multi-core for pure key-value due to native multi-threading</td>
+</tr>
+<tr>
+<td>Simplicity</td>
+<td>More features = more to operate/reason about</td>
+<td>Extremely simple mental model</td>
+</tr>
+<tr>
+<td>Memory efficiency</td>
+<td>Slightly more overhead per key (metadata for structures)</td>
+<td>Very lean for uniform-size objects</td>
+</tr>
+<tr>
+<td>Operational complexity</td>
+<td>Higher (persistence, replication, cluster config)</td>
+<td>Lower</td>
+</tr>
+<tr>
+<td>Typical use case</td>
+<td>Leaderboards, sessions, rate limiting, pub/sub, anything needing structure or durability</td>
+<td>Pure high-QPS object caching, e.g., caching rendered HTML fragments or DB query results with no need for structure</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Concrete scenarios to deliberately pick Memcached</strong>: You're caching millions of small, uniform, disposable objects (e.g., rendered page fragments, serialized DB rows) at very high QPS, you have no need for persistence or replication, and you want the absolute simplest thing to operate. Historically common at very large web properties (Facebook's original photo-caching tier, for instance) precisely because "dumb and fast" was the requirement, not "featureful."</p>
+<h3 id="caffeine-local-in-memory-cache">Caffeine / Local in-memory cache</h3>
+<ul>
+<li><strong>What it means</strong>: cache lives inside the JVM/process heap of a single running instance — no network call at all.</li>
+<li><strong>Why it's extremely fast</strong>: it's just a hash map with eviction bookkeeping — sub-microsecond access.</li>
+<li><strong>Eviction</strong>: Caffeine specifically uses a highly efficient approximation of LFU (window TinyLFU) combined with LRU-like recency, giving very good hit ratios for the memory used.</li>
+<li><strong>TTL</strong>: supported per-entry or per-cache.</li>
+<li><strong>Per-instance</strong>: this is the crux of its main limitation.</li>
+</ul>
+<p><strong>The N-server consistency problem</strong>: If you have 10 API servers, each with its own Caffeine cache, and the underlying data changes (e.g., a product price update), only the server that handles the <em>write</em> knows about it. The other 9 servers keep serving stale cached data until their local TTL expires. There is no built-in mechanism for one instance to tell the other nine "invalidate key X now."</p>
+<p>Solutions: (a) accept the staleness window if it's short and tolerable, (b) publish invalidation events over Pub/Sub or a message bus that every instance subscribes to and evicts locally, or (c) simply don't local-cache data that changes with any meaningful frequency — push it to a distributed cache instead, where there's exactly one copy to keep fresh. Many real systems use <strong>both</strong>: local cache as an L1 in front of Redis as an L2, and use pub/sub invalidation to clear L1 caches when writes happen (see multi-level caching, Section 13).</p>
+<h3 id="cdn-caches-cloudflare-cloudfront-fastly">CDN caches (Cloudflare, CloudFront, Fastly)</h3>
+<ul>
+<li><strong>Edge locations</strong>: many physical points of presence close to users worldwide; a request is served from the nearest one that has the content.</li>
+<li><strong>Cache-Control / max-age</strong>: server-set header telling caches (browser and CDN) how long content is fresh.</li>
+<li><strong>ETag</strong>: a content fingerprint; lets a client/cache do a conditional GET ("still valid?") without re-downloading the body if unchanged.</li>
+<li><strong>stale-while-revalidate</strong>: serve the (slightly) stale cached copy immediately while asynchronously fetching a fresh one in the background — great for perceived latency.</li>
+<li><strong>Cache invalidation/purging</strong>: explicit API call to evict content across all edge nodes when it changes (e.g., after deploying new CSS/JS, or removing a product image).</li>
+</ul>
+<p><strong>Good CDN candidates</strong>: images, video segments, CSS/JS bundles, product images, and public, non-personalized API responses (e.g., a public list of countries, a public leaderboard snapshot).</p>
+<p><strong>Why CDN is usually not a Redis replacement</strong>: a CDN caches whole HTTP responses/files keyed by URL, is not designed for per-user or highly dynamic, frequently-mutating data, has no rich data structures, and purging is typically URL/path-based rather than fine-grained key-based. Redis is for application-level, structured, low-latency, frequently-changing data close to your compute.</p>
+<h3 id="nginx-varnish-reverse-proxy-cache">NGINX / Varnish (reverse proxy cache)</h3>
+<pre><code>Client
+  ↓
+NGINX / Varnish
+  ↓
+Application
+  ↓
+Database
+</code></pre>
+<p>Makes sense when: many requests hit identical, cacheable HTTP responses (public pages, API GETs with shared cache keys), and you want to shield your application tier — not just your database — from repeated work, without needing full geographic edge distribution like a CDN. Often used as an internal caching layer even when a CDN also sits in front of it (CDN for global users, reverse proxy for internal/backend protection and for content not suited to public edge caching).</p>
+<hr />
+<h2 id="4-caching-patterns-mechanisms">4. Caching Patterns (Mechanisms)</h2>
+<h3 id="cache-aside-lazy-loading-the-default">Cache-aside (Lazy loading) — the default</h3>
+<pre><code>App checks Cache
+  hit  → return
+  miss → App queries DB → App writes result to Cache → return
+</code></pre>
+<p><strong>Why it's the most common pattern</strong>: the application has full control over what gets cached and when — only data that's actually requested ever ends up in cache (no wasted memory on unused data), and it degrades gracefully (if the cache is empty or down, the app can still hit the DB directly). Its downside is a "cold" miss always pays full DB latency, and there's a small window where cache and DB can disagree if not paired with an invalidation strategy.</p>
+<h3 id="read-through">Read-through</h3>
+<pre><code>App → Cache → (on miss) Cache itself fetches from DB → Cache stores it → returns to App
+</code></pre>
+<p>Here the <strong>cache layer/library</strong>, not the application, is responsible for fetching on a miss (common in cache libraries/frameworks that wrap a data-access layer). Functionally similar to cache-aside from the app's point of view, but the fetch-on-miss logic is centralized in the caching layer rather than scattered through application code.</p>
+<h3 id="write-through">Write-through</h3>
+<pre><code>App writes → Cache → Cache synchronously writes → DB
+</code></pre>
+<ul>
+<li><strong>Consistency</strong>: cache and DB are updated together, so cache is never stale as of the last write.</li>
+<li><strong>Write latency</strong>: higher, because every write pays the cost of both cache and DB writes before returning.</li>
+<li><strong>Advantages</strong>: strong read-after-write consistency, no separate invalidation logic needed.</li>
+<li><strong>Disadvantages</strong>: extra write latency on every write; you're paying to cache data on write even if it's never read again (wasted cache memory for cold data).</li>
+</ul>
+<h3 id="write-back-write-behind">Write-back (Write-behind)</h3>
+<pre><code>App writes → Cache (fast ack to App) → Cache asynchronously flushes → DB
+</code></pre>
+<ul>
+<li><strong>Why it's fast</strong>: the app gets an immediate response after only the cache write; the DB write happens later, batched/async.</li>
+<li><strong>Durability risk</strong>: if the cache crashes before flushing, that write is lost — the DB never sees it.</li>
+<li><strong>Failure scenarios</strong>: cache node dies mid-batch, network partition between cache and DB, or the DB rejects a batched write out of order.</li>
+<li><strong>When appropriate</strong>: high write-throughput scenarios that can tolerate small data loss risk or that have external durability guarantees elsewhere (e.g., analytics counters, view counts, non-critical telemetry) — essentially never for money or safety-critical writes.</li>
+</ul>
+<h3 id="write-around">Write-around</h3>
+<pre><code>App writes → DB directly (cache untouched)
+</code></pre>
+<p>Cache is populated only later, on a subsequent <strong>read</strong> (falls into cache-aside from that point). Useful when written data is rarely re-read soon after being written (e.g., bulk imports, logs, write-heavy/read-rarely data) — avoids polluting the cache with data that's unlikely to be requested again soon.</p>
+<hr />
+<h2 id="5-cache-eviction-policies">5. Cache Eviction Policies</h2>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>How it works</th>
+<th>Best when</th>
+<th>Trade-off</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>LRU</strong> (Least Recently Used)</td>
+<td>Evicts the entry that hasn't been accessed longest</td>
+<td>Access pattern has strong recency bias (recently viewed items likely viewed again)</td>
+<td>A single scan of many items (e.g., a bulk export) can wipe out a warm cache ("cache pollution")</td>
+</tr>
+<tr>
+<td><strong>LFU</strong> (Least Frequently Used)</td>
+<td>Evicts the entry with the lowest access count</td>
+<td>Popularity is stable over time, and you want to protect perennially-hot items from being evicted by a one-time burst</td>
+<td>Slow to adapt when popularity shifts (an old "frequency count" can keep a now-cold item around)</td>
+</tr>
+<tr>
+<td><strong>FIFO</strong></td>
+<td>Evicts oldest-inserted entry, regardless of usage</td>
+<td>Simplicity matters more than optimality; roughly-uniform access patterns</td>
+<td>Ignores usage entirely — can evict something that's still hot just because it's old</td>
+</tr>
+<tr>
+<td><strong>TTL</strong></td>
+<td>Entry expires after fixed time regardless of access</td>
+<td>Freshness matters more than access pattern (e.g., a price that must not be stale for more than 30s)</td>
+<td>Not usage-aware; can evict hot data early or keep cold data around until expiry</td>
+</tr>
+<tr>
+<td><strong>Random</strong></td>
+<td>Evicts a random entry</td>
+<td>Extremely simple, low bookkeeping overhead, works surprisingly well under uniform access</td>
+<td>No optimality guarantees; can evict something hot purely by chance</td>
+</tr>
+</tbody>
+</table>
+<p><strong>LRU vs LFU — Instagram feed example</strong>: Recently viewed posts (LRU-favored) are likely to be revisited briefly (user scrolls back up) — LRU protects this well. But a globally popular post (viral, LFU-favored) might not have been touched in the last few minutes yet is requested constantly across many users — pure LRU could evict it if a burst of one-time scroll traffic pushes it out. This is why Caffeine's default policy (window TinyLFU) blends recency and frequency — it protects consistently-popular items ("celebrity post") while still adapting to genuinely new trending content.</p>
+<p>Product catalog analogy: a flash-sale item (sudden, sustained popularity) is better protected by LFU; a "recently viewed products" widget is inherently an LRU concept.</p>
+<hr />
+<h2 id="6-cache-invalidation-strategies">6. Cache Invalidation Strategies</h2>
+<ul>
+<li><strong>TTL-based expiration</strong>: simplest — set-and-forget, but you're always trading off freshness window vs DB load.</li>
+<li><strong>Explicit invalidation</strong>: application code deletes/updates the cache key at the moment the underlying data changes (e.g., on <code>updateProductPrice()</code>, call <code>cache.delete("product:123")</code>).</li>
+<li><strong>Event-driven invalidation</strong>: a change event (DB change-data-capture, message queue event) triggers invalidation across all consumers/instances — decouples "who wrote the data" from "who needs to invalidate," which matters a lot with local caches spread across many servers.</li>
+<li><strong>Versioned cache keys</strong>: instead of invalidating, change the key itself (<code>product:123:v7</code>) whenever data changes; old versions simply age out via TTL/eviction, and readers always ask for the latest version pointer. Avoids race conditions inherent in delete-then-repopulate.</li>
+<li><strong>Refresh-ahead</strong>: proactively refresh a cache entry <em>before</em> it expires (typically once it crosses some threshold, e.g., 80% of TTL elapsed), so users rarely see a miss.</li>
+<li><strong>Stale-while-revalidate</strong>: serve the current (slightly stale) value immediately, kick off an async refresh in the background, update the cache when it completes — used heavily at the CDN/HTTP layer.</li>
+</ul>
+<p><strong>Example — product price</strong>: DB has ₹100, cache has ₹100. DB updates to ₹120.
+- With TTL only: cache keeps serving ₹100 until TTL expires — staleness window = TTL.
+- With explicit invalidation: the price-update code path also calls <code>cache.delete("product:123:price")</code> (or writes the new value directly, i.e., write-through) — near-zero staleness.
+- With versioned keys: the update writes <code>product:123:price:v2</code>, and a pointer/index is flipped so subsequent reads fetch v2. Old v1 just expires normally.</p>
+<p><strong>How to keep cache and DB consistent</strong> — there is no free lunch; you're choosing a point on the freshness/complexity/performance triangle. The general rule interviewers want to hear: <em>invalidate on write, expire with TTL as a safety net.</em> Relying on TTL alone is acceptable only when a bounded staleness window is genuinely fine for the business.</p>
+<hr />
+<h2 id="7-cache-stampede-thundering-herd">7. Cache Stampede / Thundering Herd</h2>
+<p><strong>Scenario</strong>: a hot cache entry expires. 10,000 concurrent requests all miss simultaneously and all hammer the DB at once — potentially enough to take the DB down.</p>
+<p><strong>Before</strong> (naive):</p>
+<pre><code>10,000 requests → all miss → all query DB → DB overloaded
+</code></pre>
+<p><strong>After</strong> (fixed):</p>
+<pre><code>10,000 requests → 1 acquires lock/leads refresh → DB queried once
+                → other 9,999 either wait briefly for the result, or get slightly-stale data
+</code></pre>
+<p><strong>Solutions</strong>
+- <strong>Distributed locks</strong>: only the first request to detect a miss acquires a lock and refreshes; others wait or fall back.
+- <strong>Request coalescing / single-flight</strong>: the app layer collapses many concurrent identical requests into a single in-flight DB call, fanning the one result out to all waiters (common library pattern, e.g., Go's <code>singleflight</code>).
+- <strong>Refresh-ahead</strong>: expire proactively before the crowd arrives, so there's never a true "everyone misses at once" moment.
+- <strong>Probabilistic early expiration</strong>: each reader has a small, increasing chance of triggering an early refresh as TTL approaches, spreading refreshes out probabilistically instead of all-at-once.
+- <strong>Stale-while-revalidate</strong>: just keep serving the (barely) expired value while one request refreshes in the background.</p>
+<hr />
+<h2 id="8-cache-penetration">8. Cache Penetration</h2>
+<p><strong>Scenario</strong>: requests for data that <strong>doesn't exist</strong>, e.g., <code>GET /users/999999999</code>. Since it's never cached (there's nothing to cache), every such request bypasses the cache entirely and hits the DB — repeatable, and exploitable by an attacker probing random IDs.</p>
+<p><strong>Solutions</strong>
+- <strong>Negative caching</strong>: cache the <em>absence</em> too (<code>user:999999999 → NOT_FOUND</code>, short TTL) so repeat lookups of the same non-existent ID are absorbed by the cache.
+- <strong>Bloom filters</strong>: a compact probabilistic structure that can definitively say "this ID was never inserted" — filters out impossible lookups before they even reach the cache/DB, with a small false-positive rate (never false negatives).
+- <strong>Input validation</strong>: reject obviously malformed/out-of-range IDs before they ever reach the cache or DB layer.
+- <strong>Rate limiting</strong>: cap how many misses/lookups a single client can generate, limiting the blast radius of an attack or bug.</p>
+<hr />
+<h2 id="9-cache-avalanche">9. Cache Avalanche</h2>
+<p><strong>Scenario</strong>: a large number of keys were all set with the same TTL (e.g., a bulk cache warm at 00:00 with TTL=1hr) — they all expire at once at 01:00, and the DB is suddenly hit with the full, un-cached load simultaneously.</p>
+<p><strong>Solutions</strong>
+- <strong>TTL jitter</strong>: add a random offset to each TTL (<code>baseTTL + random(0, 300s)</code>) so expirations spread out over time instead of landing on the same instant.
+- <strong>Staggered refresh</strong>: proactively refresh keys on a rolling schedule rather than a synchronized bulk load.
+- <strong>Multi-level caching</strong>: an L1 (local) cache plus an L2 (Redis) means even if L2 has a mass expiry, L1 absorbs some of the shock temporarily.
+- <strong>Graceful degradation</strong>: if the DB does get overwhelmed momentarily, serve stale data, degrade non-critical features, or apply backpressure/circuit breakers rather than letting the DB fall over entirely.</p>
+<hr />
+<h2 id="10-hot-keys">10. Hot Keys</h2>
+<p><strong>Scenario</strong>: one specific key gets disproportionate traffic — e.g., a celebrity's post that millions of users request in the same minute. Even though Redis Cluster distributes <em>different keys</em> across nodes, a single hot key still lives on exactly one node/shard — that one node becomes a bottleneck no matter how many other nodes exist.</p>
+<p><strong>Why Redis Cluster alone doesn't solve it</strong>: sharding distributes <em>key space</em>, not <em>per-key load</em>. All 5 million requests for the same key hash to the same slot, hence the same node.</p>
+<p><strong>Solutions</strong>
+- <strong>Key replication</strong>: manually replicate the hot key's value across multiple nodes/shards (e.g., <code>key:1</code>, <code>key:2</code>, ... <code>key:N</code>) and have clients pick one at random — spreads read load.
+- <strong>Local cache in front</strong>: cache the hot key inside each app instance's local memory (Caffeine) for a very short TTL — absorbs the vast majority of the traffic before it even reaches the distributed cache.
+- <strong>CDN</strong>: if the hot content is public and cacheable as an HTTP response, push it to the edge entirely.
+- <strong>Request coalescing</strong>: as with stampede, collapse concurrent requests for the same hot key into one backend fetch.
+- <strong>Read replicas</strong>: for the Redis node itself, add local replicas to spread read traffic for that shard.
+- <strong>Splitting hot keys</strong>: shard the logical key into sub-keys(e.g., partition a hot counter into N sub-counters, sum on read) so no single physical key/node bears the full load.</p>
+<hr />
+<h2 id="11-local-cache-vs-distributed-cache-comparison">11. Local Cache vs Distributed Cache — Comparison</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Caffeine (local)</th>
+<th>Redis</th>
+<th>Memcached</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Latency</td>
+<td>Nanoseconds (in-process)</td>
+<td>~0.5–2ms (network)</td>
+<td>~0.5–2ms (network)</td>
+</tr>
+<tr>
+<td>Scalability</td>
+<td>Limited by single instance's RAM</td>
+<td>Scales horizontally (Cluster)</td>
+<td>Scales horizontally (add nodes)</td>
+</tr>
+<tr>
+<td>Consistency across instances</td>
+<td>None — each instance independent</td>
+<td>One shared source of truth</td>
+<td>One shared source of truth</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>Competes with app's own heap</td>
+<td>Dedicated, separate from app</td>
+<td>Dedicated, separate from app</td>
+</tr>
+<tr>
+<td>Data sharing</td>
+<td>Not shared across instances</td>
+<td>Shared by all instances</td>
+<td>Shared by all instances</td>
+</tr>
+<tr>
+<td>Failure behavior</td>
+<td>Failure = just that one instance's cache gone; no network dependency</td>
+<td>Failure can affect all instances at once (blast radius)</td>
+<td>Same as Redis</td>
+</tr>
+<tr>
+<td>Complexity</td>
+<td>Very low</td>
+<td>Moderate–high (persistence, cluster, HA)</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>Cost</td>
+<td>"Free" (uses existing app RAM)</td>
+<td>Separate infra cost</td>
+<td>Separate infra cost</td>
+</tr>
+<tr>
+<td>Best use case</td>
+<td>Small, hot, slightly-stale-tolerant data (config, flags, reference tables)</td>
+<td>Structured/shared data needing consistency, ranking, sessions</td>
+<td>Pure high-QPS simple object caching</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="12-redis-vs-memcached-vs-caffeine-vs-cdn-master-table">12. Redis vs Memcached vs Caffeine vs CDN — Master Table</h2>
+<table>
+<thead>
+<tr>
+<th>Technology</th>
+<th>Best For</th>
+<th>Persistence</th>
+<th>Data Structures</th>
+<th>Distributed</th>
+<th>Typical Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Redis</td>
+<td>Structured, shared, low-latency data</td>
+<td>Optional (RDB/AOF)</td>
+<td>Rich (string/hash/list/set/zset/stream/etc.)</td>
+<td>Yes (Cluster)</td>
+<td>Sessions, leaderboards, rate limiting, pub/sub</td>
+</tr>
+<tr>
+<td>Memcached</td>
+<td>Simple, massive-scale object caching</td>
+<td>None</td>
+<td>Key-value only</td>
+<td>Yes (client-side sharding)</td>
+<td>DB query result caching, HTML fragment caching</td>
+</tr>
+<tr>
+<td>Caffeine</td>
+<td>Ultra-fast per-instance hot data</td>
+<td>None (in-memory only)</td>
+<td>Map-like (single value per key)</td>
+<td>No (local only)</td>
+<td>Config, feature flags, small lookup tables</td>
+</tr>
+<tr>
+<td>Cloudflare / CDN</td>
+<td>Global static/public content delivery</td>
+<td>N/A (edge cache)</td>
+<td>HTTP responses</td>
+<td>Yes (globally distributed)</td>
+<td>Images, video, JS/CSS, public API responses</td>
+</tr>
+<tr>
+<td>CloudFront</td>
+<td>Same as above, AWS-integrated</td>
+<td>N/A</td>
+<td>HTTP responses</td>
+<td>Yes</td>
+<td>Same as Cloudflare, tightly coupled to AWS origin (S3, ALB)</td>
+</tr>
+<tr>
+<td>Varnish</td>
+<td>High-performance HTTP reverse-proxy cache</td>
+<td>N/A</td>
+<td>HTTP responses</td>
+<td>No (single/paired instances typically)</td>
+<td>Backend HTTP acceleration</td>
+</tr>
+<tr>
+<td>NGINX cache</td>
+<td>HTTP reverse-proxy caching + routing</td>
+<td>N/A</td>
+<td>HTTP responses</td>
+<td>No (typically)</td>
+<td>Backend HTTP acceleration, often paired with load balancing</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Mental model for choosing</strong>: Ask, in order — (1) <em>Is this public, static-ish, and consumed by many geographically distributed users?</em> → CDN. (2) <em>Is this a repeated, identical HTTP request pattern that I want to shield my app tier from?</em> → reverse proxy. (3) <em>Is this small, hot, per-instance data that tolerates slight staleness across servers?</em> → local cache. (4) <em>Does everything else need a single shared, low-latency, structured store?</em> → Redis (default) or Memcached (if you truly only need dumb key-value at extreme simplicity/scale).</p>
+<hr />
+<h2 id="13-multi-level-caching">13. Multi-Level Caching</h2>
+<pre><code>Client
+  ↓
+CDN            (public static assets, public API responses)
+  ↓
+NGINX          (HTTP-level response caching, shields app tier)
+  ↓
+Local Cache    (per-instance hot/reference data, nanosecond access)
+  ↓
+Redis          (shared structured/session/ranking data)
+  ↓
+Database       (source of truth)
+</code></pre>
+<p><strong>Why multiple layers exist</strong>: each layer removes load from everything below it and serves a different <em>kind</em> of data at a different <em>speed/consistency</em> trade-off point. No single layer is right for everything.</p>
+<p><strong>What belongs where (e-commerce example)</strong>:
+- CDN: product images, category banners, static JS/CSS.
+- NGINX: fully-rendered public category/listing pages that don't vary per user.
+- Local cache: currency exchange rates, tax rules, feature flags — small, globally-shared-ish, rarely-changing.
+- Redis: shopping cart contents, session data, live inventory counts, price (with short TTL + invalidation on update).
+- Database: authoritative order records, payment records, anything requiring strong consistency.</p>
+<p><strong>How misses propagate</strong>: a miss at CDN falls to NGINX; a miss at NGINX falls to the app, which checks local cache; a local miss checks Redis; a Redis miss finally hits the DB. Each layer that gets a fresh answer typically re-populates the layers above it on the way back out.</p>
+<p><strong>How invalidation works across layers</strong>: this is the hard part. A price change must invalidate Redis (source for the app), and ideally purge any CDN/NGINX-cached pages that embedded that price, and trigger local-cache eviction on all app instances (commonly via a pub/sub "invalidate key X" broadcast). Missing any one layer means stale data can surface intermittently depending on which path a given request takes.</p>
+<p><strong>Failure scenarios</strong>: if Redis goes down, does NGINX have a stale-but-servable copy? If the CDN is purged incorrectly, does NGINX still serve the old page? Multi-level caching increases resilience (many layers can independently keep serving during a lower-layer outage) but also increases the surface area for "why am I seeing stale data" bugs — always design invalidation before you design the layering.</p>
+<hr />
+<h2 id="14-system-design-examples">14. System Design Examples</h2>
+<p>Format: <strong>Requirements → Access Pattern → Cache Location → Technology → Pattern → TTL → Eviction → Invalidation → Failure Handling → Scaling</strong></p>
+<h3 id="a-url-shortener">A. URL Shortener</h3>
+<ul>
+<li><strong>Requirements</strong>: extremely read-heavy (redirects), low-latency redirect, occasional writes (new short URL creation).</li>
+<li><strong>Access pattern</strong>: skewed — a small fraction of URLs get the vast majority of clicks (power law).</li>
+<li><strong>Cache location</strong>: distributed cache in front of DB; CDN generally not useful (redirects are per-key lookups, not static assets); local cache for the very hottest URLs.</li>
+<li><strong>Technology</strong>: Redis (or Memcached — data here is truly just key→URL, so Memcached is a legitimate, even preferable, simpler choice given no need for structures or persistence).</li>
+<li><strong>Pattern</strong>: cache-aside (miss → DB lookup → populate cache).</li>
+<li><strong>TTL</strong>: long (hours–days) since short URL mappings essentially never change once created.</li>
+<li><strong>Eviction</strong>: LRU is fine — genuinely cold URLs should fall out.</li>
+<li><strong>Extremely popular URLs (hot key)</strong>: replicate the key across shards or push it into local per-instance caches to avoid one node/shard bottlenecking.</li>
+<li><strong>Failure handling</strong>: fail open to DB lookup if cache is down (redirects just get slower, not broken).</li>
+<li><strong>Scaling</strong>: Redis Cluster/Memcached horizontal scaling as QPS grows; consider CDN-style edge redirect caching for extreme scale.</li>
+</ul>
+<h3 id="b-e-commerce">B. E-commerce</h3>
+<ul>
+<li><strong>Product details</strong>: Redis, cache-aside, medium TTL (minutes) + explicit invalidation on edit.</li>
+<li><strong>Product images</strong>: CDN, long TTL, versioned URLs to bust cache on update instead of purging.</li>
+<li><strong>Prices</strong>: Redis, short TTL + explicit invalidation on price change (freshness matters for trust/legal reasons).</li>
+<li><strong>Inventory</strong>: cache very cautiously or not at all for exact counts near zero stock — risk of overselling; often cache an <em>approximate</em> count with short TTL and re-verify against DB at checkout ("cache for display, verify at commit").</li>
+<li><strong>Shopping carts</strong>: Redis (hash per user), since carts are per-user, frequently read/written, and don't need to be durable at DB-grade (though many systems also persist carts to DB for recovery).</li>
+<li><strong>User sessions</strong>: Redis, write-through-ish (session data written to cache immediately, DB async or not at all for ephemeral sessions).</li>
+<li><strong>What should NOT be cached</strong>: real-time exact inventory at the moment of checkout, payment status, and anything where a stale read could cause a business-incorrect outcome (overselling, double charging).</li>
+</ul>
+<h3 id="c-instagram">C. Instagram</h3>
+<ul>
+<li><strong>User profiles</strong>: Redis hash, cache-aside, long-ish TTL + invalidate on profile edit.</li>
+<li><strong>Posts</strong>: Redis (metadata) + CDN (media itself); post content rarely changes once published.</li>
+<li><strong>Feed</strong>: classic <strong>fan-out</strong> decision — <em>fan-out on write</em> (precompute each follower's feed in Redis lists when a post is made; fast reads, expensive/heavy writes for high-follower-count accounts) vs <em>fan-out on read</em> (assemble the feed at read time by merging followed users' recent posts; cheaper writes, more expensive reads). Real systems use a <strong>hybrid</strong>: fan-out on write for normal users, fan-out on read for celebrity accounts (avoids "write amplification" of pushing one post to tens of millions of follower feeds).</li>
+<li><strong>Likes/comments counts</strong>: Redis counters (<code>INCR</code>), periodically flushed to DB — trades small precision windows for huge write scalability.</li>
+<li><strong>Hot posts</strong>: local cache + key replication + CDN for media, same hot-key techniques as Section 10.</li>
+</ul>
+<h3 id="d-youtube-netflix">D. YouTube / Netflix</h3>
+<ul>
+<li><strong>CDN</strong>: video segments are the primary cached artifact — chunked (e.g., HLS/DASH segments), cached at edge, by far the largest data volume in the system.</li>
+<li><strong>Metadata</strong> (title, description, view count): Redis/app cache, moderate TTL.</li>
+<li><strong>Recommendations</strong>: often precomputed offline and cached with a TTL measured in hours, since recomputing per-request is expensive and slight staleness is fine.</li>
+<li><strong>Popular content</strong>: naturally benefits most from CDN edge caching — the more popular, the higher the edge cache hit ratio.</li>
+<li><strong>Why not Redis for actual video files</strong>: Redis is RAM-based and priced/sized for structured, small, hot objects — storing multi-gigabyte video files in RAM-backed Redis is both cost-prohibitive and architecturally wrong; video delivery is a bytes-over-HTTP problem best solved by object storage + CDN, not an in-memory key-value store.</li>
+</ul>
+<h3 id="e-uber">E. Uber</h3>
+<ul>
+<li><strong>Driver locations</strong>: Redis, using <strong>geospatial commands</strong> (<code>GEOADD</code>/<code>GEOSEARCH</code>) — a sorted-set-based structure purpose-built for "find nearby drivers" queries; extremely short TTL or continuous overwrite since location changes every few seconds.</li>
+<li><strong>Nearby drivers query</strong>: Redis geospatial index, very short-lived cache, essentially a live index rather than a "cache" in the traditional sense.</li>
+<li><strong>User info</strong>: Redis, cache-aside, normal TTL.</li>
+<li><strong>Pricing (surge pricing)</strong>: cached briefly (seconds) per geo-cell, recomputed frequently — freshness matters a lot here.</li>
+<li><strong>Trip metadata</strong>: DB is authoritative (needs durability/audit trail); Redis may hold the "current active trip" state for fast access during the ride, synced to DB on state transitions.</li>
+<li><strong>Local cache</strong>: could hold static reference data like city zone boundaries, rarely-changing pricing rules.</li>
+</ul>
+<h3 id="f-chat-application">F. Chat application</h3>
+<ul>
+<li><strong>Recent messages</strong>: Redis list/stream per conversation, holding the most recent N messages for fast initial load; full history lives in DB.</li>
+<li><strong>Conversation metadata</strong>: Redis hash, cache-aside.</li>
+<li><strong>User presence</strong> (online/offline/typing): Redis with very short TTL (essentially a heartbeat — client marks itself present, TTL expiry means "went offline").</li>
+<li><strong>Unread counts</strong>: Redis counters, incremented on new message, reset on read-receipt — needs to be reasonably accurate but not perfectly durable second-to-second.</li>
+<li><strong>Consistency requirements</strong>: message content itself needs strong consistency (users must not lose messages) — DB/durable log is authoritative; presence and unread counts can tolerate looser, eventually-consistent behavior.</li>
+</ul>
+<h3 id="g-banking-payment-system">G. Banking / payment system</h3>
+<ul>
+<li><strong>What can be cached</strong>: read-mostly, non-sensitive-to-staleness reference data — exchange rates (short TTL), merchant/category metadata, UI configuration, rate limit counters.</li>
+<li><strong>What must NOT be cached (or cached very carefully)</strong>: account balances (must reflect the authoritative ledger at time of decision), transaction records, payment status.</li>
+<li><strong>Idempotency</strong>: payment APIs typically use an idempotency key stored in a fast store (often Redis, sometimes DB) to detect and safely no-op duplicate retries — this <em>is</em> a caching-adjacent pattern, but its purpose is correctness, not performance.</li>
+<li><strong>Strong consistency</strong>: for balance checks before authorizing a debit, you generally read from the DB (or a cache updated <strong>synchronously</strong>, write-through, with strict invalidation) — never rely on a possibly-stale cached balance to authorize money movement.</li>
+<li><strong>Security</strong>: cached data should never include full card numbers/secrets; anything cached must respect the same encryption-at-rest and access-control requirements as the source system.</li>
+</ul>
+<hr />
+<h2 id="15-decision-framework-if-i-need">15. Decision Framework — "If I need..."</h2>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Consider</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Extremely fast, per-instance reads of small, semi-static data</td>
+<td>Local in-memory cache (Caffeine)</td>
+</tr>
+<tr>
+<td>Simple distributed key-value caching at massive, uniform scale</td>
+<td>Memcached</td>
+</tr>
+<tr>
+<td>Distributed cache with rich data structures (ranking, counters, geospatial, pub/sub)</td>
+<td>Redis</td>
+</tr>
+<tr>
+<td>Persistent, Redis-compatible durable store</td>
+<td>Managed durable Redis-compatible services (e.g., AWS MemoryDB)</td>
+</tr>
+<tr>
+<td>Global caching of static/public content</td>
+<td>CDN</td>
+</tr>
+<tr>
+<td>HTTP response caching in front of application servers</td>
+<td>Reverse proxy (NGINX/Varnish) or CDN</td>
+</tr>
+<tr>
+<td>Complex leaderboard/ranking queries</td>
+<td>Redis Sorted Sets</td>
+</tr>
+<tr>
+<td>Very high-volume, simple object caching (no structure needed)</td>
+<td>Memcached</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reasoning, not rules</strong>: none of these are absolute. E.g., you <em>can</em> build a leaderboard on Memcached (store a serialized list, re-sort in app code), but you'd be reimplementing what Redis Sorted Sets already give you for free, at higher latency and complexity. The right answer in an interview is always "here's what I need, here's what maps to it, and here's the trade-off I'm accepting" — not a memorized rule.</p>
+<hr />
+<h2 id="16-cache-failure-scenarios">16. Cache Failure Scenarios</h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Redis fully down</td>
+<td><strong>Fail open</strong>: fall back to DB directly (slower but system stays up), ideally with a circuit breaker to avoid hammering a possibly-struggling DB with sudden full load</td>
+</tr>
+<tr>
+<td>One Redis node fails (in Cluster)</td>
+<td>Only that shard's keys are affected; replicas can be promoted automatically if HA is configured; other shards unaffected</td>
+</tr>
+<tr>
+<td>Entire Redis cluster fails</td>
+<td>Fail open to DB with aggressive rate limiting/circuit breaking to protect the DB from the full traffic surge; consider a secondary/warm-standby cache region</td>
+</tr>
+<tr>
+<td>Network partition</td>
+<td>Cache and app may disagree on state; Redis Sentinel/Cluster has quorum-based failover, but during the partition itself, expect brief inconsistency or unavailability of writes</td>
+</tr>
+<tr>
+<td>Cache becomes slow</td>
+<td>Set aggressive timeouts on cache calls + fall back to DB rather than waiting indefinitely (avoid cascading latency into the app tier)</td>
+</tr>
+<tr>
+<td>Cache returns stale data</td>
+<td>Acceptable if within your defined freshness SLA; unacceptable → add explicit invalidation, shorten TTL, or move to write-through for that data</td>
+</tr>
+<tr>
+<td>Cache is full</td>
+<td>Eviction policy kicks in (LRU/LFU/etc.); monitor eviction <em>rate</em> — high eviction rate signals your cache is undersized for the working set</td>
+</tr>
+<tr>
+<td>Hot key overloads one node</td>
+<td>See Section 10 — replication, local cache, request coalescing, splitting the key</td>
+</tr>
+</tbody>
+</table>
+<p><strong>General strategies</strong>: fail open for read-heavy, availability-prioritized systems (most consumer apps); fail closed only where serving wrong/incomplete data is worse than an error (rare, mostly safety/compliance-critical paths); circuit breakers to stop retrying a dead dependency; rate limiting to protect the DB during degraded-cache periods; replication and multi-region caching for geographically distributed resilience.</p>
+<hr />
+<h2 id="17-system-design-calculations">17. System Design Calculations</h2>
+<p><strong>Example</strong>: 100,000 requests/sec, 90% cache hit rate.
+- Requests hitting DB = 100,000 × (1 − 0.90) = <strong>10,000 req/sec</strong></p>
+<p>At 95% hit rate:
+- DB load = 100,000 × 0.05 = <strong>5,000 req/sec</strong> (half the DB load of 90%, for a "only" 5-point hit-ratio improvement)</p>
+<p>At 99% hit rate:
+- DB load = 100,000 × 0.01 = <strong>1,000 req/sec</strong> (10x less than the 90% case)</p>
+<p><strong>Why small hit-ratio improvements matter enormously at scale</strong>: DB load scales with the <em>miss rate</em>, not the hit rate, and the miss rate shrinks multiplicatively as hit rate approaches 100%. Going from 90%→99% hit rate isn't "9% better" — it's a <strong>10x reduction</strong> in absolute DB traffic. This is the single most persuasive number to bring up in an interview when justifying investment in a better caching/eviction strategy or higher cache capacity.</p>
+<p><strong>Estimating cache size / memory</strong>: (average object size) × (number of "hot" objects you intend to keep resident) × (replication factor, if any) — then size Redis/Memcached nodes with headroom (never plan to run at ~100% memory; leave room for fragmentation and traffic spikes) and add eviction policy as a safety valve for anything beyond that.</p>
+<p><strong>TTL impact</strong>: shorter TTL → lower average staleness, more DB load (more frequent misses); longer TTL → less DB load, higher staleness risk. Model this explicitly: if writes to a given entity happen roughly every X minutes, a TTL far shorter than X buys you little freshness benefit but costs real DB load; a TTL far longer than X risks meaningfully stale reads.</p>
+<hr />
+<h2 id="18-common-interview-mistakes">18. Common Interview Mistakes</h2>
+<table>
+<thead>
+<tr>
+<th>Weak answer</th>
+<th>Why it's weak</th>
+<th>Stronger framing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Just use Redis."</td>
+<td>Skips the actual decision process; ignores cases where simpler/cheaper tools fit better</td>
+<td>"Given the access pattern is X and I need Y capability, Redis fits because Z — though Memcached would also work if I don't need structures."</td>
+</tr>
+<tr>
+<td>"Redis is always faster."</td>
+<td>Not universally true (Memcached can beat it on raw multi-threaded key-value throughput); latency also depends on network, data size, serialization</td>
+<td>"They're comparable for simple key-value; the choice is about feature needs, not raw speed."</td>
+</tr>
+<tr>
+<td>"Memcached is obsolete."</td>
+<td>Still used at massive scale (simplicity is a feature, not a limitation)</td>
+<td>"Memcached is the right tool when I truly only need simple, disposable, high-throughput key-value caching."</td>
+</tr>
+<tr>
+<td>"Cache everything."</td>
+<td>Wastes memory, adds staleness risk, and can actively cause correctness bugs on sensitive data</td>
+<td>"I cache based on access frequency and tolerance for staleness — not everything benefits equally."</td>
+</tr>
+<tr>
+<td>"Use a 5-minute TTL."</td>
+<td>Arbitrary, ignores the actual write frequency and business tolerance for staleness</td>
+<td>"TTL should be derived from how often the underlying data changes and how stale is acceptable."</td>
+</tr>
+<tr>
+<td>"Use LRU for everything."</td>
+<td>Ignores workloads where LFU, TTL, or a hybrid fits the actual access pattern better</td>
+<td>"LRU is my default, but I'd consider LFU for stable long-term popularity, e.g. viral content."</td>
+</tr>
+<tr>
+<td>"CDN can replace Redis."</td>
+<td>Different data shapes and use cases entirely (static/public vs dynamic/structured)</td>
+<td>"CDN handles static/public content at the edge; Redis handles dynamic, structured, shared application state."</td>
+</tr>
+<tr>
+<td>"Redis can replace the database."</td>
+<td>Redis is not built as a durable, queryable system of record by default (even with persistence, it lacks rich querying, strong transactional guarantees at scale, etc.)</td>
+<td>"Redis complements the database; the database remains the source of truth."</td>
+</tr>
+<tr>
+<td>"NoSQL is basically a cache."</td>
+<td>Conflates a durable, queryable data store with a fast, ephemeral acceleration layer</td>
+<td>"Some NoSQL stores can serve cache-like read patterns, but they're built for durability and querying, not primarily for eviction-based, ephemeral speed."</td>
+</tr>
+<tr>
+<td>"If Redis goes down, the system goes down."</td>
+<td>Signals no failure planning — should almost always design for fail-open/degraded-mode operation</td>
+<td>"I design for graceful degradation: if Redis is down, we fail open to the DB with circuit breakers to protect it."</td>
+</tr>
+<tr>
+<td>"We don't need cache invalidation."</td>
+<td>Nearly always wrong once data changes — leads to silently wrong cached data</td>
+<td>"I pair TTL with explicit invalidation on write paths that matter for correctness."</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="19-practice-interview-questions-25">19. Practice Interview Questions (25+)</h2>
+<p>Try answering each yourself before checking the cheat sheet in Section 20 or discussing with someone.</p>
+<p><strong>Fundamentals</strong>
+1. What is a cache and why does it help system performance?
+2. Explain cache hit, cache miss, and cache hit ratio.
+3. What's the difference between cache latency and cache capacity as design constraints?</p>
+<p><strong>Redis vs Memcached</strong>
+4. When would you choose Memcached over Redis, and why?
+5. Redis supports persistence — does that make it a database replacement? Why or why not?
+6. Name three Redis data structures and a real use case for each.</p>
+<p><strong>Local vs distributed cache</strong>
+7. What problem arises when each of 10 app servers has its own local cache?
+8. When is a local cache actually the <em>right</em> choice despite that problem?
+9. How would you keep a fleet of local caches roughly in sync?</p>
+<p><strong>CDN vs Redis</strong>
+10. Why can't a CDN replace an application-level cache like Redis?
+11. What is <code>stale-while-revalidate</code> and where is it typically used?
+12. How does CDN cache purging differ from Redis key invalidation?</p>
+<p><strong>Patterns</strong>
+13. Walk through cache-aside step by step, including the miss path.
+14. Compare write-through and write-back in terms of latency and durability risk.
+15. When would write-around be the right pattern?</p>
+<p><strong>Stampede, avalanche, penetration, hot keys</strong>
+16. Design a solution for cache stampede on a very popular product page.
+17. What's the difference between cache avalanche and cache stampede?
+18. How would you defend an API against cache penetration from an attacker scanning IDs?
+19. A single Redis key is suddenly getting 5 million reads/sec — what do you do?</p>
+<p><strong>Failure handling</strong>
+20. Redis goes fully down in production — walk through what should happen end to end.
+21. What's the difference between failing open and failing closed, and when would you choose each?</p>
+<p><strong>System design applications</strong>
+22. Design the caching strategy for a URL shortener, focusing on extremely popular links.
+23. Design feed caching for an Instagram-like app — compare fan-out on write vs fan-out on read.
+24. Design driver-location caching for an Uber-like app.
+25. Design caching for a YouTube-like video platform — what goes in Redis vs what goes in a CDN, and why?
+26. Design a caching strategy for an e-commerce checkout flow, focused on what must never be served stale.
+27. Design a distributed rate limiter using Redis — which data structure would you use and why?
+28. Design a leaderboard for a gaming platform using Redis — what structure, and how do you handle ties?</p>
+<hr />
+<h2 id="20-final-cheat-sheet">20. Final Cheat Sheet</h2>
+<h3 id="caching-technology">Caching Technology</h3>
+<table>
+<thead>
+<tr>
+<th>Technology</th>
+<th>What it is</th>
+<th>Best use case</th>
+<th>Why</th>
+<th>Main trade-off</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Redis</td>
+<td>In-memory data-structure server</td>
+<td>Sessions, leaderboards, rate limiting, structured shared caching</td>
+<td>Rich data types + optional persistence + HA</td>
+<td>More operational complexity than Memcached</td>
+</tr>
+<tr>
+<td>Memcached</td>
+<td>In-memory key-value store</td>
+<td>Simple, massive-scale object caching</td>
+<td>Extremely simple, very fast, memory-efficient</td>
+<td>No persistence, no structures, no built-in HA</td>
+</tr>
+<tr>
+<td>Caffeine</td>
+<td>In-process local cache</td>
+<td>Small, hot, per-instance data</td>
+<td>Zero network latency</td>
+<td>No cross-instance consistency</td>
+</tr>
+<tr>
+<td>CDN (generic)</td>
+<td>Edge caching network</td>
+<td>Static/public global content</td>
+<td>Geographically close to users</td>
+<td>Not suited for dynamic/personalized data</td>
+</tr>
+<tr>
+<td>Cloudflare</td>
+<td>CDN + edge/security platform</td>
+<td>Global static &amp; public API caching + DDoS protection</td>
+<td>Broad edge network, built-in security features</td>
+<td>Vendor-specific config/limits</td>
+</tr>
+<tr>
+<td>CloudFront</td>
+<td>AWS CDN</td>
+<td>Static/public content, AWS-native origins</td>
+<td>Tight AWS integration (S3, ALB, Lambda@Edge)</td>
+<td>Best value inside AWS ecosystem specifically</td>
+</tr>
+<tr>
+<td>Varnish</td>
+<td>HTTP reverse-proxy cache</td>
+<td>High-performance backend HTTP acceleration</td>
+<td>Purpose-built for HTTP caching, very fast</td>
+<td>HTTP-only, not for general app-level caching</td>
+</tr>
+<tr>
+<td>NGINX cache</td>
+<td>Reverse proxy + cache</td>
+<td>HTTP response caching + routing/LB</td>
+<td>Multi-purpose (proxy, LB, cache) already in most stacks</td>
+<td>Less specialized than Varnish for pure caching</td>
+</tr>
+</tbody>
+</table>
+<h3 id="caching-pattern">Caching Pattern</h3>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Best use case</th>
+<th>Main trade-off</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cache-aside</td>
+<td>General-purpose default</td>
+<td>First read after a miss/expiry always pays full latency</td>
+</tr>
+<tr>
+<td>Read-through</td>
+<td>Systems where the cache library should own fetch logic</td>
+<td>Less app-level control over what/when to cache</td>
+</tr>
+<tr>
+<td>Write-through</td>
+<td>Strong read-after-write consistency needs</td>
+<td>Higher write latency</td>
+</tr>
+<tr>
+<td>Write-back</td>
+<td>Very high write throughput, tolerant of some data-loss risk</td>
+<td>Durability risk if cache fails before flush</td>
+</tr>
+<tr>
+<td>Write-around</td>
+<td>Write-heavy, rarely-re-read-soon data</td>
+<td>First read after write is always a miss</td>
+</tr>
+</tbody>
+</table>
+<h3 id="problems">Problems</h3>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>Why it happens</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cache stampede</td>
+<td>One hot key expires; many concurrent requests all miss at once</td>
+<td>Locking, request coalescing/single-flight, refresh-ahead</td>
+</tr>
+<tr>
+<td>Cache penetration</td>
+<td>Requests for data that doesn't exist, bypassing cache every time</td>
+<td>Negative caching, bloom filters, input validation</td>
+</tr>
+<tr>
+<td>Cache avalanche</td>
+<td>Many keys expire at the same time</td>
+<td>TTL jitter, staggered refresh, multi-level caching</td>
+</tr>
+<tr>
+<td>Hot keys</td>
+<td>One key gets disproportionate traffic</td>
+<td>Key replication, local cache layer, CDN, request coalescing, splitting the key</td>
+</tr>
+<tr>
+<td>Stale data</td>
+<td>Cache updated less often/differently than source</td>
+<td>Explicit invalidation, versioned keys, shorter TTL, write-through where needed</td>
+</tr>
+<tr>
+<td>Cache failure</td>
+<td>Node/cluster/network outage</td>
+<td>Fail open to DB, circuit breakers, replication, multi-region</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-one-decision-tree-to-memorize">The One Decision Tree to Memorize</h3>
+<pre><code>1. REQUIREMENTS
+   What data? How often does it change? How critical is freshness/correctness?
+        ↓
+2. ACCESS PATTERNS
+   Read-heavy or write-heavy? Skewed (hot keys) or uniform? Per-user or shared/global?
+        ↓
+3. FRESHNESS
+   Can this tolerate seconds/minutes of staleness, or must it be exact (money, inventory at checkout)?
+        ↓
+4. CACHE LOCATION
+   Public/static → CDN
+   Repeated identical HTTP responses → Reverse proxy
+   Small, hot, per-instance-safe → Local cache
+   Shared, structured, app-level → Distributed cache
+        ↓
+5. CACHE TECHNOLOGY
+   Need structures/pubsub/persistence → Redis
+   Need dead-simple massive key-value → Memcached
+   Need in-process speed → Caffeine
+   Need global edge delivery → CDN
+        ↓
+6. CACHING PATTERN
+   Default → Cache-aside
+   Need strict consistency on write → Write-through
+   Need max write throughput, can risk loss → Write-back
+   Rarely-reread writes → Write-around
+        ↓
+7. TTL / EVICTION
+   Set TTL from actual data-change frequency + business tolerance for staleness
+   Pick LRU (recency-driven), LFU (popularity-driven), or TTL-only based on access pattern
+        ↓
+8. INVALIDATION
+   Pair TTL with explicit invalidation on writes that matter; consider versioned keys or event-driven invalidation across instances/layers
+        ↓
+9. FAILURE HANDLING
+   Default to fail-open with circuit breakers and DB fallback; fail-closed only where wrong data is worse than downtime
+        ↓
+10. SCALING
+    Add replicas/shards/clustering as load grows; watch hit ratio and eviction rate as your primary health signals
+</code></pre>
+<p>Recite this top to bottom for any caching question, filling in the specifics of the system you're asked about — that structure alone signals strong system-design thinking, independent of which exact technology you land on.</p>
+
+  <footer>Caching — System Design Interview Guide</footer>
+</div>
+</body>
+</html>
