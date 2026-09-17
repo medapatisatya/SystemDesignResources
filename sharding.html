@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Sharding — A System Design Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B0E14;
+    --surface: #121722;
+    --surface-2: #171D2B;
+    --border: #262E40;
+    --text: #E7EAF1;
+    --muted: #8B94A9;
+    --accent: #5EEAD4;
+    --accent-dim: #1F3B37;
+    --warn: #F5A623;
+    --warn-dim: #3A2C14;
+    --danger: #F0678A;
+    --serif: 'Fraunces', Georgia, serif;
+    --sans: 'IBM Plex Sans', -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#F7F7F5; --surface:#FFFFFF; --surface-2:#F0F0EE; --border:#DEDED9;
+      --text:#1B1E24; --muted:#5B6373; --accent-dim:#DCF6F1; --warn-dim:#FCEBD1;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B0E14; --surface:#121722; --surface-2:#171D2B; --border:#262E40;
+    --text:#E7EAF1; --muted:#8B94A9; --accent-dim:#1F3B37; --warn-dim:#3A2C14;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+    font-size:16px; line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .layout{display:grid; grid-template-columns:280px minmax(0,1fr); gap:0; max-width:1280px; margin:0 auto;}
+  nav.toc{
+    position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+    padding:32px 20px 40px 28px; border-right:1px solid var(--border);
+  }
+  nav.toc::-webkit-scrollbar{width:6px;}
+  nav.toc::-webkit-scrollbar-thumb{background:var(--border); border-radius:3px;}
+  .toc-brand{font-family:var(--serif); font-size:1.05rem; font-weight:600; margin-bottom:4px;}
+  .toc-sub{color:var(--muted); font-size:0.78rem; margin-bottom:22px;}
+  .toc-list{list-style:none; margin:0; padding:0; font-size:0.86rem;}
+  .toc-list li{margin-bottom:2px;}
+  .toc-list a{
+    display:block; color:var(--muted); padding:6px 10px; border-radius:6px; line-height:1.3;
+  }
+  .toc-list a:hover{background:var(--surface-2); color:var(--text); text-decoration:none;}
+  .toc-num{color:var(--accent); font-family:var(--mono); font-size:0.76rem; margin-right:6px;}
+  main{padding:56px 56px 120px; min-width:0;}
+  .hero{margin-bottom:64px;}
+  .hero-kicker{
+    font-family:var(--mono); color:var(--accent); font-size:0.82rem; letter-spacing:0.02em;
+  }
+  h1.title{
+    font-family:var(--serif); font-weight:600; font-size:clamp(2.1rem,4vw,3.2rem);
+    line-height:1.08; margin:14px 0 18px; max-width:14ch;
+  }
+  .hero-desc{color:var(--muted); max-width:62ch; font-size:1.05rem;}
+  .framework-strip{
+    margin-top:28px; padding:16px 18px; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; font-family:var(--mono); font-size:0.82rem; color:var(--accent);
+    overflow-x:auto; white-space:nowrap;
+  }
+  section{margin:0 0 58px; scroll-margin-top:24px;}
+  section h2{
+    font-family:var(--serif); font-size:1.6rem; font-weight:600; margin:0 0 6px;
+    display:flex; align-items:baseline; gap:12px;
+  }
+  section h2 .secnum{font-family:var(--mono); font-size:0.95rem; color:var(--muted); font-weight:400;}
+  section h3{font-size:1.08rem; font-weight:600; margin:30px 0 10px; color:var(--text);}
+  section > .lede{color:var(--muted); margin:0 0 22px; max-width:70ch;}
+  p{max-width:70ch;}
+  ul,ol{max-width:70ch; padding-left:1.3em;}
+  li{margin-bottom:6px;}
+  .callout{
+    border-left:3px solid var(--accent); background:var(--surface); padding:14px 18px;
+    border-radius:0 8px 8px 0; margin:18px 0; max-width:70ch;
+  }
+  .callout.warn{border-left-color:var(--warn); }
+  .callout p{margin:0; max-width:none;}
+  .callout .label{font-family:var(--mono); font-size:0.72rem; color:var(--accent); text-transform:uppercase; letter-spacing:0.06em; display:block; margin-bottom:6px;}
+  .callout.warn .label{color:var(--warn);}
+  pre.diagram{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px; overflow-x:auto; font-family:var(--mono); font-size:0.82rem;
+    line-height:1.5; color:var(--accent); margin:18px 0; max-width:78ch;
+  }
+  pre.diagram .dim{color:var(--muted);}
+  code{
+    font-family:var(--mono); background:var(--surface-2); padding:1px 6px; border-radius:4px;
+    font-size:0.88em; color:var(--text);
+  }
+  pre.diagram code{background:none; padding:0; color:inherit;}
+  table{border-collapse:collapse; width:100%; max-width:80ch; margin:18px 0; font-size:0.92rem;}
+  th,td{border:1px solid var(--border); padding:9px 12px; text-align:left; vertical-align:top;}
+  th{background:var(--surface); font-weight:600; font-family:var(--mono); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted);}
+  tr:nth-child(even) td{background:var(--surface);}
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:80ch;}
+  @media (max-width:700px){.grid-2{grid-template-columns:1fr;}}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .card h4{margin:0 0 8px; font-size:0.95rem;}
+  .card.good{border-color:var(--accent-dim);}
+  .card.bad{border-color:var(--warn-dim);}
+  .tag{
+    display:inline-block; font-family:var(--mono); font-size:0.7rem; padding:2px 8px;
+    border-radius:20px; margin-right:6px; border:1px solid var(--border); color:var(--muted);
+  }
+  .tag.good{color:var(--accent); border-color:var(--accent-dim);}
+  .tag.bad{color:var(--warn); border-color:var(--warn-dim);}
+  details{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:12px 16px; margin:10px 0; max-width:78ch;
+  }
+  details summary{cursor:pointer; font-weight:600; font-size:0.95rem;}
+  details summary::marker{color:var(--accent);}
+  details[open] summary{margin-bottom:8px;}
+  .qa{
+    border:1px solid var(--border); border-radius:10px; margin-bottom:12px; max-width:80ch; overflow:hidden;
+  }
+  .qa .q{padding:12px 16px; background:var(--surface); font-weight:600; font-size:0.93rem;}
+  .qa .q .qi{font-family:var(--mono); color:var(--accent); margin-right:8px;}
+  .qa .a{padding:14px 16px; font-size:0.92rem; color:var(--muted); border-top:1px solid var(--border);}
+  .mistake{
+    display:grid; grid-template-columns:1fr 1fr; gap:0; max-width:80ch; border:1px solid var(--border);
+    border-radius:10px; overflow:hidden; margin-bottom:14px;
+  }
+  @media (max-width:700px){.mistake{grid-template-columns:1fr;}}
+  .mistake > div{padding:14px 16px; font-size:0.9rem;}
+  .mistake .weak{background:var(--warn-dim); border-right:1px solid var(--border);}
+  .mistake .strong{background:var(--accent-dim);}
+  @media (max-width:700px){.mistake .weak{border-right:none; border-bottom:1px solid var(--border);}}
+  .mistake .lbl{font-family:var(--mono); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); display:block; margin-bottom:6px;}
+  .keyterm{
+    display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--border); max-width:80ch;
+  }
+  .keyterm dt{font-family:var(--mono); font-weight:600; min-width:190px; color:var(--accent); font-size:0.88rem;}
+  .keyterm dd{margin:0; color:var(--muted); font-size:0.9rem;}
+  .cheatgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; max-width:90ch;}
+  .cheat-card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px;}
+  .cheat-card h5{margin:0 0 6px; font-size:0.85rem; font-family:var(--mono); color:var(--accent);}
+  .cheat-card p{margin:0; font-size:0.84rem; color:var(--muted); max-width:none;}
+  .footer-note{color:var(--muted); font-size:0.85rem; margin-top:70px; padding-top:24px; border-top:1px solid var(--border); max-width:70ch;}
+  ::selection{background:var(--accent); color:#0B0E14;}
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr;}
+    nav.toc{position:relative; height:auto; border-right:none; border-bottom:1px solid var(--border);}
+    main{padding:36px 22px 90px;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-brand">Database Sharding</div>
+    <div class="toc-sub">A system design field guide</div>
+    <ul class="toc-list">
+      <li><a href="#s1"><span class="toc-num">01</span>Fundamentals</a></li>
+      <li><a href="#s2"><span class="toc-num">02</span>Why shard: bottlenecks</a></li>
+      <li><a href="#s3"><span class="toc-num">03</span>When to shard</a></li>
+      <li><a href="#s4"><span class="toc-num">04</span>Horizontal vs vertical</a></li>
+      <li><a href="#s5"><span class="toc-num">05</span>Sharding strategies</a></li>
+      <li><a href="#s6"><span class="toc-num">06</span>Choosing a shard key</a></li>
+      <li><a href="#s7"><span class="toc-num">07</span>Hot shards</a></li>
+      <li><a href="#s8"><span class="toc-num">08</span>Sequential IDs</a></li>
+      <li><a href="#s9"><span class="toc-num">09</span>Architecture &amp; routing</a></li>
+      <li><a href="#s10"><span class="toc-num">10</span>Sharding + replication</a></li>
+      <li><a href="#s11"><span class="toc-num">11</span>Cross-shard queries</a></li>
+      <li><a href="#s12"><span class="toc-num">12</span>Cross-shard joins</a></li>
+      <li><a href="#s13"><span class="toc-num">13</span>Cross-shard transactions</a></li>
+      <li><a href="#s14"><span class="toc-num">14</span>Rebalancing / resharding</a></li>
+      <li><a href="#s15"><span class="toc-num">15</span>Virtual shards</a></li>
+      <li><a href="#s16"><span class="toc-num">16</span>Shard metadata</a></li>
+      <li><a href="#s17"><span class="toc-num">17</span>Failure scenarios</a></li>
+      <li><a href="#s18"><span class="toc-num">18</span>Sharding &amp; consistency</a></li>
+      <li><a href="#s19"><span class="toc-num">19</span>Sharding &amp; caching</a></li>
+      <li><a href="#s20"><span class="toc-num">20</span>Sharding &amp; indexing</a></li>
+      <li><a href="#s21"><span class="toc-num">21</span>Worked systems</a></li>
+      <li><a href="#s22"><span class="toc-num">22</span>Real-world databases</a></li>
+      <li><a href="#s23"><span class="toc-num">23</span>Sharding vs replication vs partitioning</a></li>
+      <li><a href="#s24"><span class="toc-num">24</span>Capacity math</a></li>
+      <li><a href="#s25"><span class="toc-num">25</span>15 shard-key examples</a></li>
+      <li><a href="#s26"><span class="toc-num">26</span>Weak answers, fixed</a></li>
+      <li><a href="#s27"><span class="toc-num">27</span>30 interview questions</a></li>
+      <li><a href="#s28"><span class="toc-num">28</span>Cheat sheet &amp; decision tree</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <div class="hero-kicker">SYSTEM DESIGN INTERVIEW PREP</div>
+      <h1 class="title">Database Sharding, taught the way an interviewer actually grades it</h1>
+      <p class="hero-desc">Not definitions — reasoning. Every section below asks the question a senior interviewer is really asking: <em>what breaks first, and why is this fix the cheapest one that works?</em> Read top to bottom, or jump to a section from the left.</p>
+      <div class="framework-strip">Requirements → Data Size → Traffic → Read/Write Pattern → Shard Key → Partitioning Strategy → Routing → Replication → Rebalancing → Failure Handling → Trade-offs</div>
+    </div>
+
+    <!-- 1 -->
+    <section id="s1">
+      <h2><span class="secnum">01</span>Sharding fundamentals</h2>
+      <p class="lede">Sharding is what you reach for when a single machine can no longer hold, or serve, all of your data — not before.</p>
+      <p><strong>Database sharding</strong> is splitting one logical dataset into multiple independent physical databases (shards), each holding a disjoint subset of the rows, so that no single machine has to store or serve all the data. The application (or a routing layer) decides which shard owns a given piece of data and sends the query there.</p>
+      <pre class="diagram">Without sharding:
+
+Application
+     │
+     ▼
+Single Database  ──►  <span class="dim">everything lives here: storage, CPU, IOPS, connections</span>
+     │
+     ▼
+Huge Dataset
+
+With sharding:
+
+                     ┌──► Shard 1  (rows 1)
+Application ─► Router├──► Shard 2  (rows 2)
+                     ├──► Shard 3  (rows 3)
+                     └──► Shard 4  (rows 4)</pre>
+      <p>Each shard is a complete, independent database — its own disk, its own CPU, its own connection pool, often its own primary/replica pair. Nothing is shared between shards except the routing logic that decides where a row lives.</p>
+      <h3>Sharding vs. partitioning</h3>
+      <p><strong>Partitioning</strong> is the general concept of splitting data into smaller pieces. <strong>Sharding</strong> is a specific, aggressive form of partitioning: the pieces live on <em>separate physical database instances</em>, usually on separate machines. A single Postgres instance with date-range table partitions is partitioning, not sharding — it's still one server, one CPU, one disk. The moment those partitions move to different servers that don't share hardware, you've crossed into sharding.</p>
+      <h3>Sharding vs. replication</h3>
+      <p>These solve opposite problems and get confused constantly. <strong>Replication</strong> copies the <em>same</em> data onto multiple machines — it buys you availability and read throughput, but every replica still has to store the full dataset and every write still has to land somewhere. <strong>Sharding</strong> splits <em>different</em> data onto different machines — it buys you write throughput and storage capacity, because each shard only holds a fraction of the data and a fraction of the writes.</p>
+      <h3>Sharding vs. caching</h3>
+      <p>Caching removes read load from the database by serving hot data from memory closer to the client. It does nothing for storage growth or write throughput — a cache miss still has to hit a full-sized, non-sharded database. Caching and sharding are complementary, not substitutes: caching buys you time before you need to shard, and once sharded, caching still sits in front of the shards.</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="s2">
+      <h2><span class="secnum">02</span>Why do we need sharding?</h2>
+      <p class="lede">Six distinct bottlenecks push teams toward sharding. Naming the actual bottleneck is the interview signal — "it's too big" is not an answer.</p>
+      <div class="grid-2">
+        <div class="card"><h4>Storage bottleneck</h4><p>A single server's disk (or the largest instance type your cloud offers) caps out — say your dataset hits <code>20 TB</code> and the biggest volume you can attach is 16 TB, or backup/restore time on a 20 TB volume becomes operationally unworkable.</p></div>
+        <div class="card"><h4>CPU bottleneck</h4><p>Sustained <code>95%</code> CPU means every query — including simple ones — queues behind others. Vertical scaling has a ceiling (the biggest instance SKU), and beyond it there is no bigger box to buy.</p></div>
+        <div class="card"><h4>Memory bottleneck</h4><p>Working set no longer fits in RAM/buffer cache, so reads that used to be memory-hits become disk-hits, and latency degrades non-linearly.</p></div>
+        <div class="card"><h4>I/O bottleneck</h4><p>Disk IOPS/throughput saturate even though CPU and RAM look fine — common with write-heavy workloads and mechanical or shared network storage.</p></div>
+        <div class="card"><h4>Connection bottleneck</h4><p>A single Postgres/MySQL instance supports on the order of a few thousand concurrent connections before context-switching overhead dominates — at scale, thousands of app instances exhaust this before CPU is the limit.</p></div>
+        <div class="card"><h4>Read bottleneck</h4><p><strong>Try read replicas before sharding.</strong> If the workload is read-heavy, adding read replicas behind a load balancer scales reads horizontally without touching the write path or splitting data at all — much cheaper than sharding.</p></div>
+      </div>
+      <h3>Write bottleneck — why replication alone doesn't fix it</h3>
+      <p>Replicas serve reads, but every write still has to go through the single primary and then propagate to every replica. Adding replicas <em>increases</em> total write amplification (the primary now fans out to more machines) without increasing how many writes/sec the system can accept. If your bottleneck is <em>write</em> throughput or the primary's storage, replication cannot help — this is precisely the situation sharding was built for: splitting the primary itself into many primaries, each owning a slice of the keyspace.</p>
+    </section>
+
+    <!-- 3 -->
+    <section id="s3">
+      <h2><span class="secnum">03</span>When should I shard?</h2>
+      <div class="callout warn"><span class="label">Interviewer signal</span><p>Do not shard just because the system is "large." Sharding is the most expensive, most operationally complex scaling technique on the list — it introduces cross-shard queries, distributed transactions, and rebalancing pain that a single database never had. Reach for it last.</p></div>
+      <p>Before proposing sharding, walk through cheaper options and explain why each one is insufficient for the stated bottleneck:</p>
+      <ul>
+        <li><strong>Index / query optimization</strong> — often a missing index or a bad query plan is the entire problem.</li>
+        <li><strong>Vertical scaling</strong> — bigger CPU/RAM/disk buys time cheaply, until you hit the largest instance available.</li>
+        <li><strong>Caching</strong> — absorbs read-heavy hot-key traffic before it reaches the DB.</li>
+        <li><strong>Read replicas</strong> — scales reads horizontally; does nothing for writes or storage.</li>
+        <li><strong>Connection pooling</strong> (e.g. PgBouncer) — fixes connection-count bottlenecks without touching data layout.</li>
+        <li><strong>Better schema design / archiving cold data</strong> — often storage "bloat" is really unindexed, un-archived history.</li>
+        <li><strong>Partitioning (single-instance)</strong> — splits a huge table into manageable chunks without leaving one machine.</li>
+      </ul>
+      <pre class="diagram">Vertical Scaling
+       │
+       ▼
+Indexes / Query Optimization
+       │
+       ▼
+Caching
+       │
+       ▼
+Read Replicas
+       │
+       ▼
+Partitioning (single instance)
+       │
+       ▼
+Sharding  ◄── last resort: write throughput or storage
+             exceeds what one primary can hold</pre>
+      <p>The exact order depends on the workload — a write-heavy ledger system exhausts vertical scaling and partitioning long before a read-heavy content site does, which might live comfortably on read replicas + caching for years. Say this explicitly in an interview: the progression is a guideline, not a law.</p>
+    </section>
+
+    <!-- 4 -->
+    <section id="s4">
+      <h2><span class="secnum">04</span>Horizontal vs. vertical partitioning</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Horizontal partitioning (sharding's building block)</h4>
+          <pre class="diagram">Shard 1 → Users 1–1M
+Shard 2 → Users 1M–2M
+Shard 3 → Users 2M–3M</pre>
+          <p>Splits <em>rows</em>. Every shard has the identical schema; each just owns a different slice of the key space. This is what "sharding" almost always refers to.</p>
+        </div>
+        <div class="card">
+          <h4>Vertical partitioning</h4>
+          <pre class="diagram">User DB
+ ├── User identity
+ ├── User profile
+ └── User preferences
+
+Separate storage
+ └── Large media / blob data</pre>
+          <p>Splits <em>columns or tables</em> by access pattern — rarely-read blobs move to object storage, hot identity fields stay in the primary relational store. Useful before sharding: it shrinks the working set and can defer horizontal sharding entirely.</p>
+        </div>
+      </div>
+      <p>The two combine in real systems: vertically separate blobs and cold data first, then horizontally shard whatever hot, structured data remains.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="s5">
+      <h2><span class="secnum">05</span>Sharding strategies</h2>
+      <p class="lede">Five patterns cover essentially every sharded system you'll be asked to design. Know the failure mode of each cold.</p>
+
+      <h3>A. Range-based sharding</h3>
+      <pre class="diagram">user_id 1–1,000,000     → Shard 1
+user_id 1,000,001–2M    → Shard 2
+user_id 2,000,001–3M    → Shard 3</pre>
+      <p><span class="tag good">+ range queries</span><span class="tag good">+ simple to reason about</span><span class="tag bad">− hot shards</span><span class="tag bad">− uneven growth</span></p>
+      <p>Range queries (<code>WHERE user_id BETWEEN ...</code>) hit a single contiguous shard — huge win for time-series and analytics workloads. The cost: if the key correlates with time or insertion order, all new writes pile onto the newest, highest-numbered shard while old shards sit idle — a classic hot shard. Rebalancing means physically splitting one range into two, which requires moving real data.</p>
+      <p><strong>Good fit:</strong> a system whose dominant query pattern is range scans over an ordered key — e.g. an analytics platform querying by date range, or a system explicitly designed to route "recent" traffic to dedicated, over-provisioned shards.</p>
+
+      <h3>B. Hash-based sharding</h3>
+      <pre class="diagram">shard = hash(user_id) % N</pre>
+      <p><span class="tag good">+ even distribution</span><span class="tag good">+ no hot ranges</span><span class="tag bad">− range queries need scatter-gather</span><span class="tag bad">− resizing reshuffles almost everything</span></p>
+      <p>A good hash function spreads keys near-uniformly across shards regardless of insertion order, eliminating the "newest range is hottest" problem. The catch is the modulo itself: changing <code>% 4</code> to <code>% 5</code> changes the target shard for the overwhelming majority of keys, not just the new fraction you intended to move — because <code>hash(k) % 4</code> and <code>hash(k) % 5</code> agree only by coincidence. That single property is why naive mod-hashing is rarely used at scale for anything that needs to grow — teams move to consistent hashing instead.</p>
+
+      <h3>C. Consistent hashing</h3>
+      <p>Nodes and keys are placed on the same conceptual ring (0 to 2<sup>32</sup>−1, hashed). A key belongs to the first node clockwise from its position. Adding or removing a node only remaps the keys between it and its neighbor — not the whole ring.</p>
+      <pre class="diagram">              0
+              │
+      ┌───────┼───────┐
+      │               │
+ Node D           Node A
+      │               │
+      │       ●key1   │
+ Node C           Node B
+      │               │
+      └───────┼───────┘
+             key1 → next node clockwise = Node A
+
+Adding Node E between A and B only steals keys
+that used to belong to B — C, D, A are untouched.</pre>
+      <p><strong>Virtual nodes</strong> (many ring positions per physical node) fix the uneven-load problem that plain consistent hashing has with a small number of nodes, and make rebalancing smoother — a new physical node picks up small slices from many peers instead of one large slice from one neighbor. This is why consistent hashing underlies Cassandra, DynamoDB, and most distributed caches: it minimizes data movement on membership changes, which is the single hardest operational problem in sharding.</p>
+
+      <h3>D. Directory-based sharding</h3>
+      <pre class="diagram">User ID → Shard Mapping   (lookup service / metadata DB)
+
+101 → Shard A
+102 → Shard C
+103 → Shard B</pre>
+      <p><span class="tag good">+ maximum flexibility (any key → any shard)</span><span class="tag good">+ rebalance by editing rows, not moving hash logic</span><span class="tag bad">+ extra infrastructure</span><span class="tag bad">− lookup service is a new single point of failure/latency</span></p>
+      <p>Instead of computing the shard mathematically, a lookup service stores an explicit mapping. This makes rebalancing trivial in principle (move a row, update the map) but adds a hop to every single query and turns the directory itself into critical infrastructure that needs its own replication and caching.</p>
+
+      <h3>E. Geographic sharding</h3>
+      <pre class="diagram">India users  → India shard
+US users     → US shard
+Europe users → Europe shard</pre>
+      <p><span class="tag good">+ lower latency (data near users)</span><span class="tag good">+ data residency / regulatory compliance (GDPR, etc.)</span><span class="tag good">+ regional blast-radius isolation</span><span class="tag bad">− users who travel or relocate</span></p>
+      <p>A user who moves from India to the US either leaves stale data behind, needs an explicit migration job, or requires the application to query multiple regions — the "moving user" problem is the standard follow-up an interviewer will ask, and the standard answer is: keep a thin global directory of "home region" per user, and support an explicit, asynchronous re-homing migration.</p>
+    </section>
+
+    <!-- 6 -->
+    <section id="s6">
+      <h2><span class="secnum">06</span>Choosing a shard key</h2>
+      <p class="lede">This is the single highest-leverage decision in a sharding design — a bad shard key cannot be fixed without resharding the whole system.</p>
+      <p>A good shard key needs, simultaneously:</p>
+      <ul>
+        <li><strong>High cardinality</strong> — enough distinct values to spread across many shards (a boolean or a 3-value enum can never do this).</li>
+        <li><strong>Even distribution</strong> — no single value should own a disproportionate share of rows or traffic.</li>
+        <li><strong>Query locality</strong> — the majority of your real queries should be answerable by hitting one shard, not all of them.</li>
+        <li><strong>Write distribution</strong> — new writes should land across many shards, not concentrate on one (see sequential-ID problem, §8).</li>
+        <li><strong>Stability</strong> — the key shouldn't change after the row is written; a mutable shard key means physically moving the row.</li>
+      </ul>
+      <div class="grid-2">
+        <div class="card good"><h4><code>user_id</code></h4><p>Usually strong: high cardinality, stable, and most product queries ("this user's orders," "this user's posts") are naturally scoped to one user — excellent locality. Weakness: cross-user analytical queries ("all orders in India") become scatter-gather.</p></div>
+        <div class="card bad"><h4><code>country</code></h4><p>Low cardinality (under 200 values) and wildly uneven — a handful of countries hold most users. Guarantees hot shards. Only usable as a *secondary* dimension (e.g. combined with geographic sharding for compliance), never as the sole key at scale.</p></div>
+        <div class="card bad"><h4><code>created_at</code></h4><p>Great for range queries, terrible for write distribution — every new row has the newest timestamp, so all writes hit the same (newest) shard/range. Classic hot-shard generator; needs hashing or salting if used at all.</p></div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section id="s7">
+      <h2><span class="secnum">07</span>Hot shards / hotspots</h2>
+      <pre class="diagram">Shard 1 → 10% traffic
+Shard 2 → 10% traffic
+Shard 3 → 70% traffic   ◄── hot shard
+Shard 4 → 10% traffic</pre>
+      <p>A hot shard is a shard receiving disproportionate load relative to its peers, even though the sharding scheme is "correct" on paper. Common causes: celebrity users (one row gets millions of reads), viral products, recent-timestamp writes concentrating on the newest range, and geographic concentration of users.</p>
+      <h3>Mitigations, roughly in order of invasiveness</h3>
+      <ul>
+        <li><strong>Better shard key</strong> — if the root cause is the key itself, no amount of infrastructure fixes it.</li>
+        <li><strong>Hashing</strong> — breaks correlation between key and load for most workloads.</li>
+        <li><strong>Key salting</strong> — append a random suffix to a hot key so its writes fan out across multiple physical partitions, then merge on read (common for celebrity-user write fan-out).</li>
+        <li><strong>Virtual shards</strong> — let one hot logical shard be backed by many small physical pieces that can be independently moved off an overloaded node.</li>
+        <li><strong>Consistent hashing</strong> — spreads rebalancing cost when a hot node needs relief.</li>
+        <li><strong>Splitting the hot partition</strong> — surgically break one overloaded shard into two.</li>
+        <li><strong>Caching</strong> — absorb read-heavy hotspots (celebrity profile reads) before they reach the shard at all.</li>
+      </ul>
+    </section>
+
+    <!-- 8 -->
+    <section id="s8">
+      <h2><span class="secnum">08</span>Sequential IDs and hotspots</h2>
+      <pre class="diagram">ID: 100001, 100002, 100003, 100004, ...</pre>
+      <p>If shards are assigned by range over a monotonically increasing ID, every new write goes to whichever shard owns the current tail of the range — every other shard sits idle for writes. This is one of the most common real-world sharding mistakes.</p>
+      <table>
+        <tr><th>Alternative</th><th>Trade-off</th></tr>
+        <tr><td>Hash-based distribution</td><td>Even write spread; loses natural ordering / range-scan ability.</td></tr>
+        <tr><td>UUIDs (v4)</td><td>Fully random, great spread; larger (128-bit) index footprint, no embedded ordering or timestamp.</td></tr>
+        <tr><td>Snowflake-style IDs</td><td>Timestamp + machine ID + sequence — roughly time-ordered <em>and</em> distributed enough to avoid single-node hotspotting; the standard choice at scale (Twitter, Discord, Instagram).</td></tr>
+        <tr><td>Randomized keys</td><td>Similar to UUIDs; sometimes just a random prefix bolted onto a sequential suffix.</td></tr>
+        <tr><td>Time + randomness (e.g. ULID)</td><td>Sortable-ish while spreading write load better than pure sequential IDs; a middle ground.</td></tr>
+      </table>
+    </section>
+
+    <!-- 9 -->
+    <section id="s9">
+      <h2><span class="secnum">09</span>Sharding architecture</h2>
+      <h3>Application-level sharding</h3>
+      <pre class="diagram">Application
+    │
+    ▼
+Shard Router (in-app logic: hash(key) → shard)
+    │
+┌───┼───────┬───────┐
+▼   ▼       ▼       ▼
+Shard 1  Shard 2  Shard 3</pre>
+      <p>The application itself computes the target shard and opens a connection to it directly. Fast (no extra network hop) and simple to start, but every service that touches the data has to embed and keep in sync the same routing logic — a real maintenance cost as the number of services grows.</p>
+      <h3>Database proxy / router layer</h3>
+      <p>A dedicated proxy (e.g. Vitess's <code>vtgate</code>, or a custom router) sits between the application and the shards, looks up routing via a metadata service, and forwards the query. This centralizes routing logic — one place to update when shards move — at the cost of an extra network hop and a new piece of infrastructure that itself needs to be highly available.</p>
+      <table>
+        <tr><th></th><th>Application-level</th><th>Proxy / infra-level</th></tr>
+        <tr><td>Latency</td><td>Lower (direct connection)</td><td>Slightly higher (extra hop)</td></tr>
+        <tr><td>Consistency of routing logic</td><td>Duplicated per service</td><td>Centralized</td></tr>
+        <tr><td>Operational surface</td><td>Simpler infra, more app coupling</td><td>New HA component to run</td></tr>
+        <tr><td>Good for</td><td>One dominant service/monolith</td><td>Many services / polyglot stacks</td></tr>
+      </table>
+    </section>
+
+    <!-- 10 -->
+    <section id="s10">
+      <h2><span class="secnum">10</span>Sharding + replication</h2>
+      <p class="lede">Production systems almost always run both, because they solve different axes of the scaling problem.</p>
+      <pre class="diagram">        Shard 1                    Shard 2
+     ┌──────────┐               ┌──────────┐
+     │ Primary  │               │ Primary  │
+     └────┬─────┘               └────┬─────┘
+          ▼                          ▼
+     ┌──────────┐               ┌──────────┐
+     │ Replica  │               │ Replica  │
+     └──────────┘               └──────────┘</pre>
+      <p><strong>Sharding scales writes and storage</strong> by giving each slice of the keyspace its own primary. <strong>Replication scales reads and availability</strong> within a shard by giving that primary standby copies to read from and fail over to. Neither substitutes for the other: replication alone caps write throughput at whatever one primary can do (see §2); sharding alone with no replicas means a single disk failure on any shard takes that entire slice of your data offline with no failover target.</p>
+    </section>
+
+    <!-- 11 -->
+    <section id="s11">
+      <h2><span class="secnum">11</span>Cross-shard queries</h2>
+      <pre class="diagram">SELECT * FROM users WHERE country = 'India';</pre>
+      <p>If <code>users</code> is sharded by <code>user_id</code>, "all Indian users" could be on any shard — there is no single shard to route this query to.</p>
+      <ul>
+        <li><strong>Scatter-gather</strong> — fan the query out to every shard in parallel, then merge results in the application/router. Correct but expensive: latency is bounded by the <em>slowest</em> shard, and load on every shard spikes for what should be a narrow query.</li>
+        <li><strong>Global secondary index</strong> — maintain a separate, denormalized index (e.g. <code>country → [user_ids]</code>) that itself may be sharded by <code>country</code>, so the query becomes a single lookup instead of a fan-out.</li>
+        <li><strong>Dedicated search system</strong> (Elasticsearch/OpenSearch) — for genuinely ad-hoc, multi-attribute queries, replicate the relevant fields into a search index built for exactly this access pattern instead of forcing the shards to serve it.</li>
+      </ul>
+      <p>The performance implication to state out loud in an interview: scatter-gather turns a query's cost from O(1 shard) into O(N shards), and its tail latency into the max of N tail latencies — this is why teams route around it with secondary indexes or search systems rather than accepting it as the default.</p>
+    </section>
+
+    <!-- 12 -->
+    <section id="s12">
+      <h2><span class="secnum">12</span>Cross-shard joins</h2>
+      <pre class="diagram">SELECT * FROM orders JOIN users ON orders.user_id = users.id;
+
+users  → Shard 1
+orders → Shard 4   (different shard key!)</pre>
+      <p>A relational join assumes both tables are queryable from the same engine. Across shards there is no join operator — you'd have to fetch matching rows from each shard separately and stitch them together in application code, which is slow and loses transactional consistency between the two reads.</p>
+      <ul>
+        <li><strong>Co-locate related data</strong> — shard <code>orders</code> by the <em>same</em> key as <code>users</code> (e.g. <code>user_id</code>), so a user's orders always live on the same shard as the user. This is the single most powerful lever in sharded schema design.</li>
+        <li><strong>Denormalization</strong> — embed the data you'd otherwise join (e.g. store a snapshot of the user's name on the order row) so no join is needed at read time.</li>
+        <li><strong>Application-side joins</strong> — fetch from each shard and merge in code, accepted only for low-frequency, low-latency-sensitivity queries.</li>
+        <li><strong>Separate analytical systems</strong> — replicate all shards into a data warehouse (via CDC) where joins across the full dataset are cheap, and keep the online shards join-free.</li>
+      </ul>
+      <div class="callout"><span class="label">Why this matters</span><p><strong>Data locality</strong> — designing shard keys so that data accessed together lives together — is the difference between a sharded system that feels like a normal database and one that requires a distributed-systems PhD for every query.</p></div>
+    </section>
+
+    <!-- 13 -->
+    <section id="s13">
+      <h2><span class="secnum">13</span>Cross-shard transactions</h2>
+      <pre class="diagram">Transfer $100
+
+Account A → Shard 1
+Account B → Shard 5
+
+Need atomically:  Debit A  +  Credit B</pre>
+      <p>A normal ACID transaction assumes one engine coordinating one commit log. Across two shards, if the debit commits on Shard 1 and the credit then fails on Shard 5, you've silently destroyed money.</p>
+      <ul>
+        <li><strong>Two-phase commit (2PC)</strong> — a coordinator asks every participant to "prepare," then commits everywhere only if all say yes. Gives strong atomicity but blocks all participants on a slow or failed coordinator, and doesn't scale well under contention.</li>
+        <li><strong>Distributed transaction protocols</strong> (e.g. Spanner's TrueTime-based commits) — some systems build genuinely consistent cross-shard transactions into the storage layer, at real latency and complexity cost.</li>
+        <li><strong>Saga pattern</strong> — break the transaction into a sequence of local transactions, each with a defined compensating action if a later step fails (e.g. "credit failed → run compensating debit-reversal"). Gives eventual consistency instead of atomicity, but scales far better and avoids blocking.</li>
+        <li><strong>Event-driven / compensating transactions</strong> — publish "debited" and "credited" events and let downstream consumers reconcile asynchronously, with retries and dead-letter handling for failures.</li>
+      </ul>
+      <p>The trade-off to name explicitly: 2PC buys correctness by sacrificing availability and latency; sagas buy availability and scale by sacrificing immediate atomicity in favor of eventual, compensatable consistency. Most real payment systems co-locate accounts that transact frequently (or use a ledger service that owns all balance mutations) specifically to avoid needing cross-shard transactions at all.</p>
+    </section>
+
+    <!-- 14 -->
+    <section id="s14">
+      <h2><span class="secnum">14</span>Rebalancing / resharding</h2>
+      <pre class="diagram">Before:
+Shard 1 → 500 GB
+Shard 2 → 500 GB
+Shard 3 → 5 TB    ◄── needs to split
+
+After:
+Shard 1 → 500 GB
+Shard 2 → 500 GB
+Shard 3a → 2.5 TB
+Shard 3b → 2.5 TB</pre>
+      <p>Rebalancing is moving data between shards to restore even load — triggered by uneven growth, a hot shard, or simply adding capacity. Approaches: <strong>adding shards</strong> and remapping a slice of the keyspace to them, <strong>splitting</strong> one oversized shard into two, and letting <strong>consistent hashing / virtual shards</strong> minimize how much data actually has to move on either operation.</p>
+      <h3>Resharding without significant downtime</h3>
+      <ol>
+        <li><strong>Dual writes</strong> — start writing every new/updated row to both the old and new shard layout simultaneously.</li>
+        <li><strong>Backfill</strong> — copy historical data from the old shard into its new home in the background, at a throttled rate that doesn't compete with live traffic.</li>
+        <li><strong>Verify</strong> — checksum or spot-compare old vs. new to confirm the backfill is complete and correct.</li>
+        <li><strong>Cutover</strong> — flip reads to the new layout, typically shard by shard or via a feature-flagged percentage rollout.</li>
+        <li><strong>Stop dual writes / decommission</strong> — once fully cut over and verified, retire the old mapping.</li>
+      </ol>
+      <p>This "dual-write → backfill → verify → cutover" sequence is the standard pattern behind essentially every large-scale online resharding (Stripe, Shopify, and others have written about variants of it) — know the shape of it, because "how do you reshard without downtime" is a near-guaranteed follow-up question.</p>
+    </section>
+
+    <!-- 15 -->
+    <section id="s15">
+      <h2><span class="secnum">15</span>Consistent hashing and virtual shards, in depth</h2>
+      <pre class="diagram">Physical Shard A          Physical Shard B
+ ├── V1                    ├── V4
+ ├── V2                    ├── V5
+ └── V3                    └── V6
+
+Ring position → virtual shard → physical shard (indirection layer)</pre>
+      <p>Each physical shard is represented by many small "virtual shards" scattered around the hash ring instead of one large contiguous slice. Rebalancing then means reassigning a handful of virtual shards from an overloaded physical shard to a new one — a small, targeted data movement — instead of splitting one giant contiguous range and moving half of it. Virtual shards also smooth out load: with only a few physical nodes on a ring, one node can randomly land a disproportionate arc; many small virtual slices per node average that out.</p>
+    </section>
+
+    <!-- 16 -->
+    <section id="s16">
+      <h2><span class="secnum">16</span>Shard metadata</h2>
+      <p>Something has to answer: "<code>user_id = 12345</code> lives on Shard 7." Options, roughly cheapest to most flexible:</p>
+      <ul>
+        <li><strong>Static configuration</strong> — a config file or constant baked into app code (e.g. the modulo formula). Zero infra, but changing shard count means redeploying every service.</li>
+        <li><strong>Metadata database</strong> — a small, heavily-cached database holding the shard map, consulted by the router.</li>
+        <li><strong>Service discovery / configuration service</strong> (etcd, ZooKeeper, Consul) — strongly consistent, watchable, built for exactly this kind of small critical mapping.</li>
+        <li><strong>Consistent hashing</strong> — no metadata store needed at all for the common case; the hash function <em>is</em> the map, with node membership as the only external state.</li>
+        <li><strong>Dedicated routing service</strong> — an internal service purpose-built to answer "which shard," fronted by its own cache and replicas.</li>
+      </ul>
+      <div class="callout warn"><span class="label">Failure mode</span><p>If the shard metadata service goes down, every query that needs to resolve a shard is stuck — this makes the metadata layer a potential single point of failure for the <em>entire</em> sharded system, regardless of how many shards you have. It must be replicated, cached aggressively at the router/application layer, and designed to fail toward "serve stale-but-correct mapping" rather than "reject all traffic."</p></div>
+    </section>
+
+    <!-- 17 -->
+    <section id="s17">
+      <h2><span class="secnum">17</span>Failure scenarios</h2>
+      <p class="lede">For each scenario: What happens → Impact → Recovery → Prevention.</p>
+      <details><summary>1. One shard goes down</summary><p><strong>What happens:</strong> queries routed to that shard fail. <strong>Impact:</strong> partial outage — only the rows on that shard are affected, not the whole system (this is sharding's key availability advantage over a single monolith). <strong>Recovery:</strong> fail over to that shard's replica. <strong>Prevention:</strong> every shard needs its own replica(s) and automated failover.</p></details>
+      <details><summary>2. One shard becomes extremely slow</summary><p><strong>What happens:</strong> latency on that slice of data spikes, and scatter-gather queries touching that shard now run at its speed. <strong>Impact:</strong> can silently degrade the whole system if fan-out queries are common, even though only one shard misbehaves. <strong>Recovery:</strong> per-shard timeouts and circuit breakers so a slow shard is skipped/degraded rather than blocking everything. <strong>Prevention:</strong> per-shard health monitoring and load shedding.</p></details>
+      <details><summary>3. A shard becomes full</summary><p><strong>What happens:</strong> writes to that shard start failing. <strong>Impact:</strong> localized write outage for that key range. <strong>Recovery:</strong> emergency split/rebalance, or temporary read-only mode for that shard. <strong>Prevention:</strong> capacity alerts well before the limit, and a rebalancing runbook that doesn't need to be invented under pressure.</p></details>
+      <details><summary>4. Shard router goes down</summary><p><strong>What happens:</strong> nothing can be routed anywhere. <strong>Impact:</strong> total outage, regardless of how healthy the shards themselves are. <strong>Recovery:</strong> failover to a standby router instance. <strong>Prevention:</strong> the router must be built with the same HA rigor as the shards — it is a single point of failure by construction unless replicated.</p></details>
+      <details><summary>5. Network partition</summary><p><strong>What happens:</strong> some shards or replicas become unreachable from others. <strong>Impact:</strong> depends on the consistency model — a system might serve stale reads or reject writes rather than risk a split-brain. <strong>Recovery:</strong> partition-tolerant design (quorum reads/writes) resolves automatically once connectivity returns. <strong>Prevention:</strong> choose a CP or AP stance deliberately per CAP trade-offs, and test partition behavior, not just node-down behavior.</p></details>
+      <details><summary>6. A shard loses its primary</summary><p><strong>What happens:</strong> writes to that shard stop. <strong>Impact:</strong> localized write outage. <strong>Recovery:</strong> automated replica promotion. <strong>Prevention:</strong> health-checked automatic failover rather than manual intervention.</p></details>
+      <details><summary>7. A shard loses all replicas</summary><p><strong>What happens:</strong> the primary is now a single point of failure for that shard's data. <strong>Impact:</strong> no failover target if the primary also fails — risk of data loss. <strong>Recovery:</strong> urgently provision new replicas from the primary. <strong>Prevention:</strong> alert on replica count dropping below a minimum, not just on zero replicas.</p></details>
+      <details><summary>8. A bad shard key causes extreme hotspotting</summary><p><strong>What happens:</strong> one shard absorbs a large fraction of total traffic. <strong>Impact:</strong> that shard degrades or falls over while others sit idle — effectively an unplanned capacity outage. <strong>Recovery:</strong> emergency mitigations from §7 (caching, salting, splitting). <strong>Prevention:</strong> shard-key selection review (§6) before sharding, and load monitoring per-shard, not just in aggregate.</p></details>
+      <details><summary>9. Resharding fails halfway through</summary><p><strong>What happens:</strong> some data has moved to the new layout, some hasn't. <strong>Impact:</strong> reads/writes may be inconsistent or missing depending on which layout they're routed against. <strong>Recovery:</strong> this is exactly why dual-writes + verification (§14) exist — the old layout stays authoritative and fully functional until the new one is verified complete, so a failed migration can pause or roll back without data loss. <strong>Prevention:</strong> never cut over reads until backfill is verified; keep the migration idempotent and resumable.</p></details>
+    </section>
+
+    <!-- 18 -->
+    <section id="s18">
+      <h2><span class="secnum">18</span>Sharding and consistency</h2>
+      <div class="callout"><span class="label">Clarify this explicitly</span><p>Sharding itself does not determine consistency. Sharding is purely about <em>where</em> data lives; consistency is about <em>what guarantees</em> reads and writes make relative to each other. You can build a strongly consistent sharded system (each shard uses synchronous replication and cross-shard transactions use 2PC) or an eventually consistent one (async replication, no cross-shard atomicity) — the choice is orthogonal to whether you shard at all.</p></div>
+      <p>What sharding <em>does</em> make harder: <strong>strong consistency</strong> within a shard is as easy as in a single database, but across shards it requires distributed transaction protocols (§13). <strong>Ordering</strong> guarantees (e.g. global sequence numbers) become expensive across shards, since each shard's local order says nothing about another's. <strong>Read-after-write consistency</strong> is fine for single-shard operations but requires routing a user's subsequent reads to the same shard/replica they wrote to if you want to guarantee they see their own write immediately.</p>
+    </section>
+
+    <!-- 19 -->
+    <section id="s19">
+      <h2><span class="secnum">19</span>Sharding and caching</h2>
+      <pre class="diagram">Client
+  │
+  ▼
+CDN            ◄── static/public content, edge-cached
+  │
+  ▼
+Redis          ◄── hot keys, shard-aware if partitioned itself
+  │
+  ▼
+Shard Router
+  │
+  ▼
+Database Shards</pre>
+      <p>Each layer should cache what it's closest to: the CDN caches content with no per-user variance; an application-tier cache (Redis/Memcached) caches hot rows and query results, ideally partitioned the same way as the underlying shards so a cache miss and its resulting DB query land on the same node without an extra routing hop. <strong>Hot keys</strong> in the cache mirror hot shards in the DB — the same mitigations (salting, splitting a hot cache key across multiple cache nodes) apply. <strong>Invalidation</strong> gets harder with sharding because a write to one shard needs to invalidate the corresponding cache entry specifically, not flush broadly — shard-aware cache-key design (embedding the shard ID or the natural key) keeps invalidation targeted.</p>
+    </section>
+
+    <!-- 20 -->
+    <section id="s20">
+      <h2><span class="secnum">20</span>Sharding and indexing</h2>
+      <p>Data sharded by <code>user_id</code> but frequently searched by <code>email</code> is the canonical version of this problem: a lookup by email has no idea which shard to query.</p>
+      <ul>
+        <li><strong>Local index</strong> — an index that exists independently on each shard, useful only for queries that are already scoped to that shard.</li>
+        <li><strong>Global secondary index</strong> — a separate, often independently-sharded index keyed by the secondary attribute (e.g. shard the index by <code>hash(email)</code>), mapping <code>email → user_id/shard</code>. Adds write amplification (every user write also updates the index) in exchange for O(1) lookups by the secondary key.</li>
+        <li><strong>Directory lookup</strong> — a dedicated <code>email → shard</code> table, essentially a purpose-built global index, often the pragmatic answer for a small number of alternate lookup keys.</li>
+        <li><strong>Search engine</strong> (Elasticsearch) — for open-ended, multi-field, or fuzzy search, replicate the searchable fields into a system built for exactly that, rather than trying to make the sharded OLTP store do it.</li>
+      </ul>
+    </section>
+
+    <!-- 21 -->
+    <section id="s21">
+      <h2><span class="secnum">21</span>System-design examples, worked</h2>
+      <p class="lede">Framework for each: Requirements → Scale → Data Model → Access Patterns → Shard Key → Strategy → Routing → Replication → Hotspots → Rebalancing → Failure Handling → Trade-offs.</p>
+
+      <h3>A. Instagram</h3>
+      <p><strong>Shard key:</strong> <code>user_id</code> for users and their own posts/comments (co-located for locality); a separate <code>post_id</code>-sharded store for global post lookup. <strong>Hotspots:</strong> celebrity accounts generate massive read fan-out on their own shard — mitigated with aggressive caching of celebrity profiles/feeds and, for writes, fan-out-on-read instead of fan-out-on-write for very large follower counts. <strong>Feed generation:</strong> typically a hybrid — fan-out-on-write (push new posts to followers' feed caches) for normal users, fan-out-on-read (pull at request time) for celebrities, precisely to avoid a single hot write path. <strong>Cross-shard queries:</strong> a user's home feed inherently spans many other users' shards — solved via a separate feed/timeline service that denormalizes recent posts rather than joining across user shards live.</p>
+
+      <h3>B. E-commerce</h3>
+      <p><strong>Shard key:</strong> <code>user_id</code> for users/orders (co-located, so "my orders" never crosses shards); <code>product_id</code> or category-hash for the product catalog. <strong>Hotspots:</strong> flash-sale products create extreme read/write concentration on one shard — mitigated with caching, key salting for inventory counters, and pre-warming capacity ahead of known sale events. <strong>Inventory consistency:</strong> inventory decrement needs to be atomic per product, which is naturally single-shard if product is the key — the hard case is a cart spanning products on different shards, handled via sagas rather than a single distributed transaction. <strong>Cross-shard transactions:</strong> checkout (payment + inventory + order creation) is the textbook saga: reserve inventory, charge payment, create order, with compensating "release inventory" / "refund" steps on failure.</p>
+
+      <h3>C. Uber</h3>
+      <p><strong>Shard key:</strong> geographic cell (e.g. geohash/S2 cell) for drivers and trip matching — riders and drivers need to be queried by "who's near me," which is inherently a geographic access pattern, not a user-ID one. <strong>Hotspots:</strong> dense, high-demand cities create hot cells — mitigated with finer-grained cell subdivision in dense areas and coarser cells in sparse ones (variable-resolution geo-sharding). <strong>Real-time workload:</strong> constant driver location pings are extremely write-heavy; often handled by a specialized in-memory/geo-indexed store rather than a general-purpose sharded RDBMS, decoupled from the durable trip/billing data which can shard by <code>trip_id</code> or <code>user_id</code> instead.</p>
+
+      <h3>D. Twitter/X-like system (500M users, 100M posts/day)</h3>
+      <p><strong>Shard key:</strong> Snowflake-style IDs for tweets (time-ordered, distributed) sharded by hash; user data sharded by <code>user_id</code>. <strong>Celebrity/hot-key problem:</strong> identical to Instagram's — hybrid fan-out strategy. <strong>Timeline:</strong> a dedicated, precomputed timeline store (not a live join of "tweets from everyone I follow") because that join would be a massive scatter-gather on every single page load. <strong>Replication:</strong> heavy read-replica usage given read:write ratios often exceeding 100:1 on social platforms.</p>
+
+      <h3>E. URL Shortener (100M writes/day, 10B reads/day)</h3>
+      <p><strong>Shard key:</strong> hash of the short code (or a Snowflake-style ID encoded into the short code itself) — read-dominated by ~100:1, so the design center is read scaling. <strong>Strategy:</strong> hash-based sharding for even write spread, extremely aggressive caching (a large fraction of reads should never reach a shard at all — cache hit rates in the high 90s are the target), read replicas per shard. <strong>Hot URLs:</strong> viral links are the celebrity-user problem again — cache-first design absorbs this almost entirely. <strong>Failover:</strong> given the read skew, losing a shard's primary is tolerable briefly if replicas can serve reads; write unavailability for that shard's key range is the acceptable degraded mode.</p>
+
+      <h3>F. Banking system</h3>
+      <p><strong>Shard key:</strong> account ID, chosen so that an account's full transaction history and balance mutations are always local to one shard. <strong>Cross-shard transfers:</strong> unavoidable when two accounts land on different shards — this is the canonical saga-vs-2PC decision point; many real banking systems use a synchronous two-phase-commit-like protocol or route through a central ledger service specifically because financial correctness outweighs the latency/availability cost. <strong>Strong consistency</strong> is usually non-negotiable here, unlike the other examples. <strong>Regulatory requirements</strong> often mandate geographic data residency, adding a geographic-sharding dimension on top of the account-based one. <strong>Failure handling:</strong> must favor rejecting a transfer over risking a partial, non-atomic debit/credit.</p>
+    </section>
+
+    <!-- 22 -->
+    <section id="s22">
+      <h2><span class="secnum">22</span>Real-world sharding technologies</h2>
+      <table>
+        <tr><th>System</th><th>Partitioning model</th><th>Best fit</th><th>Main trade-off</th></tr>
+        <tr><td>MongoDB</td><td>Range or hash sharding on a chosen shard key, via <code>mongos</code> routers and a config-server metadata layer</td><td>Document workloads needing horizontal write scale</td><td>Shard-key choice is nearly irreversible without a live resharding operation</td></tr>
+        <tr><td>Cassandra</td><td>Consistent hashing (partitioner) across a peer-to-peer ring, no single coordinator</td><td>Very high write throughput, multi-region, tunable consistency</td><td>Limited query flexibility — designed around known access patterns, not ad-hoc joins</td></tr>
+        <tr><td>DynamoDB</td><td>Hash (or hash+range) partition key, fully managed, automatic partition splitting</td><td>Predictable-access-pattern workloads wanting zero ops overhead</td><td>Partition key design is critical; hot partitions throttle even with capacity to spare elsewhere</td></tr>
+        <tr><td>CockroachDB</td><td>Automatic range-based sharding with Raft consensus per range; ranges split/merge automatically</td><td>Teams wanting SQL + strong consistency + horizontal scale without manual shard management</td><td>Distributed consensus adds write latency vs. a single-node database</td></tr>
+        <tr><td>YugabyteDB</td><td>Hash or range sharding of "tablets," Raft-replicated, Postgres-compatible layer on top</td><td>Postgres-compatible workloads needing distributed scale</td><td>Similar consensus latency trade-off to CockroachDB</td></tr>
+        <tr><td>Vitess</td><td>Shards plain MySQL instances behind a <code>vtgate</code> proxy; app mostly unaware</td><td>Scaling an existing MySQL app without a full rewrite</td><td>Cross-shard queries/joins still need careful schema design (VSchema)</td></tr>
+        <tr><td>PostgreSQL (native partitioning)</td><td>Declarative table partitioning — range/list/hash — but single instance</td><td>Manageability of huge tables before true sharding is needed</td><td>Not sharding: doesn't add machines, so no write-throughput ceiling relief</td></tr>
+        <tr><td>Citus (Postgres extension)</td><td>Distributes Postgres tables across worker nodes by a distribution column; coordinator handles routing/joins</td><td>Scaling Postgres specifically, keeping full SQL/joins for co-located data</td><td>Best joins require distribution-column co-location, same discipline as any sharded schema</td></tr>
+        <tr><td>Google Spanner</td><td>Automatic range sharding with TrueTime-based global strong consistency and distributed transactions built-in</td><td>Systems needing globally consistent transactions across shards without hand-rolled sagas/2PC</td><td>Cost and the underlying complexity/latency of true global consistency</td></tr>
+      </table>
+      <p>The architectural throughline: newer "NewSQL" systems (CockroachDB, Yugabyte, Spanner) try to make sharding <em>automatic</em> and hide it behind SQL semantics, while older-generation systems (MongoDB, Cassandra, DynamoDB, Vitess) require the application designer to choose the shard key and live with its consequences explicitly. Know which category a system in your design falls into.</p>
+    </section>
+
+    <!-- 23 -->
+    <section id="s23">
+      <h2><span class="secnum">23</span>Sharding vs. partitioning vs. replication vs. caching</h2>
+      <table>
+        <tr><th>Concept</th><th>What it does</th><th>Main purpose</th><th>Example</th></tr>
+        <tr><td>Replication</td><td>Copies data</td><td>Availability / read scaling</td><td>Primary + replicas</td></tr>
+        <tr><td>Sharding</td><td>Splits data across machines</td><td>Write / storage scaling</td><td>Users split across shards</td></tr>
+        <tr><td>Partitioning</td><td>Splits data logically/physically (may stay on one machine)</td><td>Manageability / performance</td><td>Date-range table partitions</td></tr>
+        <tr><td>Caching</td><td>Stores frequently accessed data closer to the client</td><td>Latency / read-load reduction</td><td>Redis</td></tr>
+      </table>
+      <p>A mature production architecture typically uses all four at once: partitioning keeps individual tables manageable, sharding spreads those partitions across machines for write/storage scale, replication gives each shard availability and read throughput, and caching sits in front of everything to absorb the hottest reads before they reach a shard at all.</p>
+    </section>
+
+    <!-- 24 -->
+    <section id="s24">
+      <h2><span class="secnum">24</span>Capacity math</h2>
+      <h3>Number of shards from data size</h3>
+      <pre class="diagram">Total data       = 20 TB
+Target shard size = 500 GB
+                                     20 TB
+Shards needed  ≈  ───────────  =  40 shards
+                     500 GB</pre>
+      <p>Round up and add headroom (e.g. target 60–70% utilization per shard so growth and rebalancing have room to work) — don't plan to exactly fill shards on day one.</p>
+      <h3>Then check throughput, not just storage</h3>
+      <pre class="diagram">Peak traffic = 1,000,000 requests/sec
+Each shard can sustain, say, 20,000 req/sec
+
+                                  1,000,000
+Shards needed for throughput ≈  ───────────  = 50 shards
+                                    20,000</pre>
+      <p>Here throughput (50 shards) demands <em>more</em> shards than storage alone did (40) — take the larger of the two numbers. <strong>Shard count should never be sized on storage alone</strong>: a workload with modest data volume but extreme request rate (e.g. a URL shortener, or a leaderboard) can need far more shards than its data size implies, and vice versa for a write-light, storage-heavy archive.</p>
+      <p>The same two-sided check applies to estimating <strong>data per shard</strong> (total data ÷ shard count, watched over time as data grows unevenly), <strong>queries per shard</strong> (total QPS ÷ shard count, but skewed by hot keys — always plan for the hottest shard, not the average), <strong>replication traffic</strong> (write volume × replica count, since every write is copied to every replica of its shard), and <strong>rebalancing cost</strong> (data that must move ÷ available migration bandwidth, which is why virtual shards/consistent hashing matter — they shrink the numerator).</p>
+    </section>
+
+    <!-- 25 -->
+    <section id="s25">
+      <h2><span class="secnum">25</span>Fifteen shard-key examples</h2>
+      <div class="qa">
+        <div class="q"><span class="qi">1</span>Social media (posts)</div>
+        <div class="a"><strong>Candidates:</strong> post_id, user_id, created_at · <strong>Recommended:</strong> user_id (co-locate a user's posts) with a separate hash-sharded post_id index for direct lookups · <strong>Why:</strong> most reads are "this user's posts" · <strong>Problem:</strong> celebrity accounts hot-spot · <strong>Alternative:</strong> hybrid fan-out (§21A)</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">2</span>E-commerce (orders)</div>
+        <div class="a"><strong>Candidates:</strong> order_id, user_id, product_id · <strong>Recommended:</strong> user_id · <strong>Why:</strong> "my orders" is the dominant query, and co-locates with the user shard · <strong>Problem:</strong> seller/warehouse-side analytics need cross-shard scans · <strong>Alternative:</strong> CDC pipeline into a warehouse for analytics</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">3</span>Banking (accounts/transactions)</div>
+        <div class="a"><strong>Candidates:</strong> account_id, customer_id, branch_id · <strong>Recommended:</strong> account_id · <strong>Why:</strong> transactions are almost always scoped to one account · <strong>Problem:</strong> transfers between accounts on different shards · <strong>Alternative:</strong> sagas or a coordinating ledger service (§13, §21F)</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">4</span>Ride-sharing (trips/locations)</div>
+        <div class="a"><strong>Candidates:</strong> driver_id, rider_id, geo-cell · <strong>Recommended:</strong> geo-cell (geohash/S2) · <strong>Why:</strong> the core query is "who's near me," inherently spatial · <strong>Problem:</strong> dense-city hot cells · <strong>Alternative:</strong> variable-resolution cells, finer in dense areas</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">5</span>Messaging (chats/messages)</div>
+        <div class="a"><strong>Candidates:</strong> conversation_id, sender_id, message_id · <strong>Recommended:</strong> conversation_id · <strong>Why:</strong> all messages in a thread are read/written together · <strong>Problem:</strong> huge group chats/broadcast channels become hot · <strong>Alternative:</strong> split very large conversations across sub-partitions</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">6</span>IoT (device telemetry)</div>
+        <div class="a"><strong>Candidates:</strong> device_id, timestamp, region · <strong>Recommended:</strong> device_id (hashed) · <strong>Why:</strong> queries are almost always "this device's history" · <strong>Problem:</strong> naive time-based sharding hot-spots on the newest range · <strong>Alternative:</strong> hash(device_id) combined with time-based sub-partitioning for retention/expiry</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">7</span>Analytics / event logging</div>
+        <div class="a"><strong>Candidates:</strong> event_time, tenant_id, event_type · <strong>Recommended:</strong> tenant_id + time-bucketed sub-partitions · <strong>Why:</strong> queries scope to one tenant and a time window · <strong>Problem:</strong> large tenants hot-spot · <strong>Alternative:</strong> hash sub-sharding within a large tenant</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">8</span>SaaS / multi-tenant applications</div>
+        <div class="a"><strong>Candidates:</strong> tenant_id, user_id · <strong>Recommended:</strong> tenant_id · <strong>Why:</strong> tenants never query across each other's data — perfect natural isolation and locality · <strong>Problem:</strong> a handful of very large enterprise tenants dwarf the rest ("noisy neighbor") · <strong>Alternative:</strong> dedicated shards for oversized tenants, shared shards for small ones</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">9</span>Logging platforms</div>
+        <div class="a"><strong>Candidates:</strong> service_name, timestamp, trace_id · <strong>Recommended:</strong> hash(service_name or trace_id) with time-based retention partitioning · <strong>Why:</strong> spreads write load evenly while keeping expiry cheap · <strong>Problem:</strong> a single noisy service can dominate volume · <strong>Alternative:</strong> per-service quota + salting</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">10</span>Gaming (player state/matches)</div>
+        <div class="a"><strong>Candidates:</strong> player_id, match_id, region · <strong>Recommended:</strong> player_id for profile/inventory; match_id for live match state · <strong>Why:</strong> different access patterns need different keys — this is normal · <strong>Problem:</strong> global leaderboards need cross-shard aggregation · <strong>Alternative:</strong> a separate, purpose-built leaderboard service (e.g. sorted-set store)</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">11</span>Video platform (videos/views)</div>
+        <div class="a"><strong>Candidates:</strong> video_id, channel_id, uploader_id · <strong>Recommended:</strong> video_id (hashed) for metadata/views; channel_id for a creator's video list · <strong>Why:</strong> matches the two dominant query shapes · <strong>Problem:</strong> viral videos hot-spot views/comments · <strong>Alternative:</strong> caching + counter salting for view counts</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">12</span>URL shortener</div>
+        <div class="a"><strong>Candidates:</strong> short_code, creation timestamp · <strong>Recommended:</strong> hash of short_code · <strong>Why:</strong> pure lookup workload, wants even spread, no useful range-query pattern · <strong>Problem:</strong> viral links hot-spot · <strong>Alternative:</strong> aggressive caching (§21E)</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">13</span>Search platform (index shards)</div>
+        <div class="a"><strong>Candidates:</strong> document_id, term, tenant_id · <strong>Recommended:</strong> document_id (hashed) for the primary index, replicated inverted indexes per shard · <strong>Why:</strong> search engines shard the corpus and scatter-gather queries by design · <strong>Problem:</strong> every query touches every shard (scatter-gather is the norm here, not an edge case) · <strong>Alternative:</strong> tiered indexes — small/hot indexes searched first</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">14</span>Payment processing</div>
+        <div class="a"><strong>Candidates:</strong> merchant_id, payment_id, customer_id · <strong>Recommended:</strong> merchant_id for merchant-scoped queries, payment_id (hashed) for the payment ledger itself · <strong>Why:</strong> most dashboards/reports are merchant-scoped; the ledger wants even write spread · <strong>Problem:</strong> refunds/disputes reference a payment that may live separately from the merchant view · <strong>Alternative:</strong> a canonical payment_id-sharded ledger with a merchant_id-sharded read-optimized view</div>
+      </div>
+      <div class="qa">
+        <div class="q"><span class="qi">15</span>Multi-region content platform</div>
+        <div class="a"><strong>Candidates:</strong> user_id, region, content_id · <strong>Recommended:</strong> region (geographic sharding) as the top-level split, user_id within region · <strong>Why:</strong> latency and data-residency requirements dominate · <strong>Problem:</strong> users who relocate/travel across regions · <strong>Alternative:</strong> a thin global "home region" directory plus explicit async re-homing migration (§5E)</div>
+      </div>
+    </section>
+
+    <!-- 26 -->
+    <section id="s26">
+      <h2><span class="secnum">26</span>Common interview mistakes — and the better answer</h2>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Just shard by user_id."</div><div class="strong"><span class="lbl">Better</span>Name the actual query patterns first — user_id is often right, but only because most queries are user-scoped. State that reasoning, and flag which queries it breaks (cross-user analytics).</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Hashing is always better."</div><div class="strong"><span class="lbl">Better</span>Hashing solves hotspotting but destroys range queries. If the workload needs range scans (time-series, leaderboards by score), range or a hybrid key may beat pure hashing.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"More shards means better performance."</div><div class="strong"><span class="lbl">Better</span>More shards means more cross-shard coordination overhead, more metadata to manage, and — if the key is bad — the same hotspot, just on a smaller fraction of a now-larger fleet. Right-size to the bottleneck (§24), don't over-shard by default.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Sharding solves everything."</div><div class="strong"><span class="lbl">Better</span>Sharding solves write/storage scaling and introduces new problems (cross-shard queries, joins, transactions, rebalancing). It's a trade, not a cure.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Replication and sharding are the same."</div><div class="strong"><span class="lbl">Better</span>Replication copies the same data for availability/read-scale; sharding splits different data for write/storage-scale. Production systems use both, for different reasons.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Use UUIDs and hotspots disappear."</div><div class="strong"><span class="lbl">Better</span>UUIDs fix write-distribution hotspots from sequential IDs, but do nothing for access-pattern hotspots like a celebrity user or a viral product — those need caching, salting, or splitting.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Cross-shard joins are easy."</div><div class="strong"><span class="lbl">Better</span>There is no native cross-shard join operator. It requires co-location, denormalization, application-side stitching, or a separate analytical system — each with real trade-offs.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Cross-shard transactions are just normal transactions."</div><div class="strong"><span class="lbl">Better</span>They require 2PC, a saga, or a system with built-in distributed transactions (Spanner) — each trades off latency, availability, or immediacy of consistency differently.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"We can add shards whenever we want."</div><div class="strong"><span class="lbl">Better</span>Adding shards triggers rebalancing, which moves real data and, with naive mod-hashing, can reshuffle nearly everything. Plan the strategy (consistent hashing, virtual shards) for this before you need it.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Consistent hashing means no data movement."</div><div class="strong"><span class="lbl">Better</span>It means <em>minimized</em> data movement — only the keys near the changed node move, not zero keys.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"Sharding automatically gives high availability."</div><div class="strong"><span class="lbl">Better</span>Sharding alone means a shard's failure takes only its slice of data down, but each shard still needs its own replication and failover to actually be available — sharding without replication is many single points of failure, not one.</div></div>
+      <div class="mistake"><div class="weak"><span class="lbl">Weak</span>"If one shard fails, the entire database fails."</div><div class="strong"><span class="lbl">Better</span>Precisely the opposite is the point of sharding — a failed shard degrades only the fraction of data/traffic it owns, not the whole system, provided the router/metadata layer itself is resilient (§17.4).</div></div>
+    </section>
+
+    <!-- 27 -->
+    <section id="s27">
+      <h2><span class="secnum">27</span>Thirty interview questions</h2>
+      <p class="lede">Attempt these yourself first — the answers (with reasoning) follow.</p>
+      <ol>
+        <li>What is database sharding?</li>
+        <li>Why do we need sharding instead of just using a bigger server?</li>
+        <li>What's the difference between sharding and partitioning?</li>
+        <li>What's the difference between sharding and replication?</li>
+        <li>Compare range-based and hash-based sharding.</li>
+        <li>Explain consistent hashing and why it matters.</li>
+        <li>What makes a good shard key?</li>
+        <li>Why is <code>created_at</code> usually a bad shard key on its own?</li>
+        <li>What is a hot shard, and what causes one?</li>
+        <li>How would you fix a hot shard in production without downtime?</li>
+        <li>What is resharding, and when is it needed?</li>
+        <li>How do you reshard a live system without significant downtime?</li>
+        <li>What are cross-shard queries, and how do you handle them?</li>
+        <li>Why are cross-shard joins hard, and how do you avoid needing them?</li>
+        <li>How do distributed transactions work across shards?</li>
+        <li>Compare two-phase commit and the saga pattern.</li>
+        <li>What is a global secondary index, and when do you need one?</li>
+        <li>How would you shard a system that must operate across multiple regions?</li>
+        <li>Why do production systems combine sharding with replication?</li>
+        <li>Walk through what happens when a single shard goes down.</li>
+        <li>What happens if the shard router itself goes down?</li>
+        <li>Design a sharded database for a system with 500M users and heavy read traffic.</li>
+        <li>Design Instagram's sharding strategy, focused on the celebrity-user problem.</li>
+        <li>Design Uber's data model for real-time driver location and matching.</li>
+        <li>Design Twitter's timeline/feed generation under sharding.</li>
+        <li>Design an e-commerce system's sharding, focused on checkout consistency.</li>
+        <li>Design a banking system's sharding strategy, focused on transfer atomicity.</li>
+        <li>How do you decide how many shards you need?</li>
+        <li>What's wrong with sizing shard count purely on total storage?</li>
+        <li>What are the biggest operational risks of sharding that a single database doesn't have?</li>
+      </ol>
+
+      <h3>Answers &amp; reasoning</h3>
+      <div class="qa"><div class="q"><span class="qi">Q1</span>What is database sharding?</div><div class="a">Splitting one logical dataset into multiple independent physical databases, each owning a disjoint subset of rows, so no single machine stores or serves everything. See §1.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q2</span>Why not just use a bigger server?</div><div class="a">Vertical scaling has a hard ceiling — the largest instance type available — and doesn't help once storage, CPU, IOPS, connections, or write throughput individually exceed what any single box can do. See §2, §3.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q3</span>Sharding vs. partitioning?</div><div class="a">Partitioning is the general technique of splitting data; sharding specifically means those pieces live on separate physical machines. Single-instance partitioning is not sharding. See §1.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q4</span>Sharding vs. replication?</div><div class="a">Replication copies the same data for availability/read scale; sharding splits different data for write/storage scale. Complementary, not interchangeable. See §1, §10.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q5</span>Range vs. hash sharding?</div><div class="a">Range: great for range queries, prone to hot shards on correlated/sequential keys. Hash: even distribution, but range queries need scatter-gather and resizing (mod-N) reshuffles almost everything. See §5A–B.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q6</span>Consistent hashing — why does it matter?</div><div class="a">It minimizes data movement when nodes are added/removed by only remapping the keys near the changed node, versus naive mod-hashing which reshuffles nearly the entire keyspace. See §5C, §15.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q7</span>What makes a good shard key?</div><div class="a">High cardinality, even distribution, query locality, even write distribution, and stability. See §6.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q8</span>Why is <code>created_at</code> a bad shard key alone?</div><div class="a">Every new write shares the newest timestamp, so all writes hit the same range/shard — a textbook write hotspot. See §6, §8.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q9</span>What is a hot shard?</div><div class="a">A shard receiving disproportionate load relative to its peers, from celebrity users, viral content, sequential-ID writes, or geographic concentration. See §7.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q10</span>Fix a hot shard live?</div><div class="a">Layer mitigations without a full reshard first: caching, key salting, splitting the hot partition into virtual shards that can be relocated — reserve a full re-key for when the shard-key choice itself is the root cause. See §7.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q11</span>What is resharding, and when is it needed?</div><div class="a">Moving/redistributing data across shards, needed when a shard outgrows its capacity, becomes hot, or shard count changes. See §14.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q12</span>Reshard without downtime?</div><div class="a">Dual writes to old and new layout → background backfill → verification → gradual cutover → retire the old layout. See §14.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q13</span>Cross-shard queries?</div><div class="a">Scatter-gather (fan out, merge), global secondary indexes for O(1) lookups on a non-shard-key attribute, or a dedicated search system for open-ended queries. See §11.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q14</span>Cross-shard joins?</div><div class="a">No native join operator across shards; solved by co-locating related data under the same shard key, denormalizing, application-side stitching, or offloading to a separate analytical warehouse. See §12.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q15</span>Distributed transactions across shards?</div><div class="a">Two-phase commit for strong atomicity at a latency/availability cost, sagas for eventual consistency with compensating actions, or a system with built-in distributed transactions (Spanner). See §13.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q16</span>2PC vs. saga?</div><div class="a">2PC blocks all participants until every node agrees to commit — strong but fragile under slow/failed nodes. Sagas break the transaction into local steps with compensations, trading immediate atomicity for availability and scale. See §13.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q17</span>Global secondary index?</div><div class="a">A separate, often independently-sharded index on a non-primary-shard-key attribute (e.g. email when sharded by user_id), needed whenever a frequent query pattern doesn't match the shard key. See §20.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q18</span>Multi-region sharding?</div><div class="a">Geographic sharding for latency and data-residency, with a thin global directory for "home region" and an explicit async re-homing path for users who relocate. See §5E.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q19</span>Why combine sharding with replication?</div><div class="a">They scale different axes — sharding for writes/storage, replication for reads/availability — and a shard with no replicas is a single point of failure for its slice of data. See §10.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q20</span>One shard goes down — walk through it.</div><div class="a">Queries to that shard's key range fail until failover to its replica completes; other shards are unaffected — this partial-blast-radius behavior is sharding's key availability advantage. See §17.1.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q21</span>Shard router goes down?</div><div class="a">Total outage regardless of shard health, since nothing can be routed — the router needs the same HA rigor (replication, failover) as the shards themselves. See §17.4.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q22</span>Design for 500M users, heavy reads.</div><div class="a">Shard by user_id for locality; lean heavily on read replicas and caching given the read-heavy skew; consider whether sharding is even needed yet vs. replicas + caching alone (§3) before committing to it. See §21D, §3.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q23</span>Instagram, celebrity-user problem.</div><div class="a">Hybrid fan-out: push to follower feed caches for normal accounts, pull-at-read-time for massive-follower accounts, to avoid a single hot write path fanning out to millions of feeds. See §21A.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q24</span>Uber's real-time location data.</div><div class="a">Geo-cell sharding (geohash/S2), variable resolution for dense vs. sparse regions, decoupled from durable trip/billing data which shards independently by trip_id/user_id. See §21C.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q25</span>Twitter timeline under sharding.</div><div class="a">A dedicated precomputed timeline/feed store rather than a live cross-shard join over "everyone I follow," because that join would be a full scatter-gather on every page load. See §21D.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q26</span>E-commerce checkout consistency.</div><div class="a">Checkout (inventory reservation + payment + order creation) is a saga with compensating actions (release inventory, refund) rather than a single atomic cross-shard transaction. See §21B.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q27</span>Banking transfer atomicity.</div><div class="a">Shard by account_id for locality; for cross-shard transfers, favor a stronger protocol (2PC or a coordinating ledger service) over sagas, because financial correctness usually outweighs latency/availability trade-offs here. See §21F, §13.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q28</span>How many shards do you need?</div><div class="a">Take the larger of (total data ÷ target shard size) and (peak throughput ÷ per-shard sustainable throughput), with headroom for growth and rebalancing. See §24.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q29</span>Why not size shard count on storage alone?</div><div class="a">Throughput and storage can diverge sharply — a small, extremely hot dataset (URL shortener, leaderboard) can need many more shards than its data volume implies, and vice versa. See §24.</div></div>
+      <div class="qa"><div class="q"><span class="qi">Q30</span>Biggest operational risks unique to sharding?</div><div class="a">Cross-shard queries/joins/transactions with no native support, rebalancing that can move enormous amounts of data, a metadata/routing layer that becomes a new single point of failure, and a shard-key decision that's expensive to reverse once data is written. See §11–17.</div></div>
+    </section>
+
+    <!-- 28 -->
+    <section id="s28">
+      <h2><span class="secnum">28</span>Final cheat sheet</h2>
+
+      <h3>Sharding strategy — how it works → best use case → main problem</h3>
+      <div class="cheatgrid">
+        <div class="cheat-card"><h5>Range-based</h5><p>Contiguous key ranges per shard. Best for range-scan-heavy workloads. Problem: hot shards on sequential/time-correlated keys.</p></div>
+        <div class="cheat-card"><h5>Hash-based</h5><p><code>hash(key) % N</code>. Best for even load distribution. Problem: range queries need scatter-gather; resizing reshuffles most keys.</p></div>
+        <div class="cheat-card"><h5>Consistent hashing</h5><p>Ring + virtual nodes. Best for systems that grow/shrink often. Problem: added complexity vs. plain hashing.</p></div>
+        <div class="cheat-card"><h5>Directory-based</h5><p>Explicit key→shard map. Best for maximum rebalancing flexibility. Problem: lookup service becomes critical infra.</p></div>
+        <div class="cheat-card"><h5>Geographic</h5><p>Region-based split. Best for latency + data residency. Problem: users who relocate across regions.</p></div>
+      </div>
+
+      <h3>Key concepts, one line each</h3>
+      <dl>
+        <div class="keyterm"><dt>Shard key</dt><dd>The attribute used to decide which shard a row belongs to.</dd></div>
+        <div class="keyterm"><dt>Partition</dt><dd>A subset of data split off from the whole, logically or physically.</dd></div>
+        <div class="keyterm"><dt>Hot shard</dt><dd>A shard receiving disproportionate load relative to its peers.</dd></div>
+        <div class="keyterm"><dt>Scatter-gather</dt><dd>Fan a query out to every shard in parallel, then merge results.</dd></div>
+        <div class="keyterm"><dt>Shard router</dt><dd>The layer that decides which shard a given query should hit.</dd></div>
+        <div class="keyterm"><dt>Virtual node</dt><dd>A small slice of the hash ring mapped to a physical shard, many-to-one.</dd></div>
+        <div class="keyterm"><dt>Consistent hashing</dt><dd>Ring-based key placement that minimizes data movement on membership changes.</dd></div>
+        <div class="keyterm"><dt>Resharding</dt><dd>Changing the shard layout or count, and moving data accordingly.</dd></div>
+        <div class="keyterm"><dt>Rebalancing</dt><dd>Redistributing data across existing/new shards to restore even load.</dd></div>
+        <div class="keyterm"><dt>Cross-shard query</dt><dd>A query whose answer requires data from more than one shard.</dd></div>
+        <div class="keyterm"><dt>Cross-shard transaction</dt><dd>A transaction that must atomically touch rows on more than one shard.</dd></div>
+        <div class="keyterm"><dt>Global secondary index</dt><dd>An index on a non-shard-key attribute, maintained independently to avoid scatter-gather lookups.</dd></div>
+      </dl>
+
+      <h3>Sharding vs. replication, in one diagram</h3>
+      <pre class="diagram">Replication:
+Same data → multiple machines
+
+Sharding:
+Different data → different machines
+
+Production:
+Different data
+    │
+    ▼
+Multiple replicas per shard</pre>
+
+      <h3>The sharding decision tree</h3>
+      <pre class="diagram">Is one bottleneck (storage, CPU, IOPS, connections, or writes)
+genuinely unfixable by a bigger box?
+        │
+       NO ──► Fix it: indexing, caching, read replicas,
+              connection pooling, vertical scale, partitioning.
+        │
+       YES
+        │
+        ▼
+What's the dominant access pattern?
+        │
+        ├─ Mostly single-entity lookups (user, account, tenant)
+        │     → shard by that entity's ID
+        │
+        ├─ Mostly range scans (time-series, ordered feeds)
+        │     → range-based, watch for hot recent-range writes
+        │
+        ├─ Spatial / "near me" queries
+        │     → geo-cell sharding
+        │
+        └─ Multi-tenant isolation required
+              → shard by tenant_id, watch for oversized tenants
+        │
+        ▼
+Pick distribution mechanism:
+  need elastic add/remove nodes? → consistent hashing + virtual shards
+  need max rebalancing flexibility? → directory-based
+  fixed, rarely-resized cluster? → plain hash or range is fine
+        │
+        ▼
+Design routing (app-level vs. proxy) + replication per shard
+        │
+        ▼
+Identify what breaks:
+  cross-shard queries?  → secondary index / search system
+  cross-shard joins?    → co-locate or denormalize
+  cross-shard txns?     → saga, or 2PC/coordinated ledger if
+                           correctness must be immediate
+        │
+        ▼
+Plan rebalancing (dual-write → backfill → verify → cutover)
+and failure handling BEFORE you need them.</pre>
+
+      <div class="callout"><span class="label">The question every design must answer</span><p>"Why did you choose this shard key and sharding strategy instead of the alternatives?" — name the actual bottleneck, explain why cheaper techniques (§3) couldn't fix it, and name the new problems this specific strategy introduces. That reasoning chain, not the diagram, is what's being graded.</p></div>
+    </section>
+
+    <div class="footer-note">A field guide for system design interview preparation — covering sharding fundamentals through worked examples, failure scenarios, and a 30-question drill.</div>
+  </main>
+</div>
+</body>
+</html>
