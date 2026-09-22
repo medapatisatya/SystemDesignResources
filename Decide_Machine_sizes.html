@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Design: 4-Vector Sizing Framework Cheat Sheet</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #111;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-top: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        h3 {
+            color: #34495e;
+            margin-top: 20px;
+        }
+        code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            background-color: #f1f1f1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #e1e1e1;
+            margin: 10px 0;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: #fff;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .example-box {
+            background-color: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>4-Vector Sizing Framework Cheat Sheet</h1>
+        <p>The <strong>4-Vector Sizing Framework</strong> calculates server cluster sizes by isolating four key constraints: <strong>storage capacity, network bandwidth, RAM volume, and CPU/IOPS throughput</strong>. The final capacity planning size equals the maximum machine count required by any single resource vector.</p>
+
+        <h2>Part 1: The Sizing Formulas & Core Logic</h2>
+        
+        <h3>1. The Formulas</h3>
+        <ul>
+            <li>
+                <strong>Storage Count (N<sub>storage</sub>):</strong> 
+                <br><code>Total Data Volume (Data/Day × Retention Days) / Single Node SSD Capacity</code>
+            </li>
+            <li>
+                <strong>Bandwidth Count (N<sub>bandwidth</sub>):</strong> 
+                <br><code>Peak Ingress or Egress Throughput (Gbps) / Single Node Network Interface Limit (Gbps)</code>
+            </li>
+            <li>
+                <strong>RAM Count (N<sub>ram</sub>):</strong> 
+                <br><code>Active Hot Working Set (e.g., 20% of Daily Unique Records) / Single Node Available Memory (RAM)</code>
+            </li>
+            <li>
+                <strong>Throughput Count (N<sub>compute</sub>):</strong> 
+                <br><code>Peak Read + Write Operations per Second (QPS) / Single Node Max Query Processing Limit</code>
+            </li>
+        </ul>
+
+        <h3>2. Golden Rules for Interviews</h3>
+        <ul>
+            <li><strong>The Max Rule:</strong> <code>Final Fleet Size = max(N<sub>storage</sub>, N<sub>bandwidth</sub>, N<sub>ram</sub>, N<sub>compute</sub>)</code></li>
+            <li><strong>Safety Headroom:</strong> Always add a <strong>30% capacity buffer</strong> to the final count to absorb unexpected traffic spikes.</li>
+            <li><strong>Asymmetric Pipes:</strong> Always evaluate <strong>Ingress vs. Egress network paths independently</strong>. Systems like video streaming or URL shorteners are heavily egress-bound.</li>
+        </ul>
+
+        <h2>Part 2: Cloud Instance Cheat Sheet</h2>
+        <p>When sizing systems in design interviews, map your final vector bottlenecks directly to standard machine profiles or cloud tiers. Assume a baseline <strong>Standard Production Node (8 vCPUs, 32 GB RAM, 2 TB NVMe SSD, 15 Gbps network, 10,000 QPS limit)</strong> for generic calculations.</p>
+
+        <h3>1. Baseline Configurations (General Purpose)</h3>
+        <ul>
+            <li><strong>Standard Medium Worker Node:</strong> 4 vCPUs, 16 GB RAM, 12.5 Gbps network. Used for stateless web servers, small API services, and microservices.</li>
+            <li><strong>Standard Large Worker Node:</strong> 8 vCPUs, 32 GB RAM, 15 Gbps network. Best for standard application logic layers and mid-size caching fleets.</li>
+        </ul>
+
+        <h3>2. Optimized Profiles (Workload Specific)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Workload Family</th>
+                    <th>Interview Analogy</th>
+                    <th>Standard Specifications</th>
+                    <th>Perfect For...</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Compute Optimized</strong></td>
+                    <td>High CPU / Low RAM</td>
+                    <td>8 to 16 vCPUs<br>16 to 32 GB RAM<br>15 to 30 Gbps network</td>
+                    <td>Ad fraud detection engines, real-time gaming logic, image transcoding.</td>
+                </tr>
+                <tr>
+                    <td><strong>Memory Optimized</strong></td>
+                    <td>High RAM / Low Disk</td>
+                    <td>4 to 8 vCPUs<br>32 to 64 GB RAM<br>12.5 to 15 Gbps network</td>
+                    <td>Redis cluster shards, Memcached fleets, distributed graph databases.</td>
+                </tr>
+                <tr>
+                    <td><strong>Storage Optimized</strong></td>
+                    <td>Massive Local SSD NVMe</td>
+                    <td>4 to 16 vCPUs<br>32 to 128 GB RAM<br>Up to 3.7 TB NVMe SSD local drive</td>
+                    <td>Cassandra nodes, MySQL/PostgreSQL primary replicas, Kafka broker storage.</td>
+                </tr>
+                <tr>
+                    <td><strong>Network Optimized</strong></td>
+                    <td>High Throughput Pipes</td>
+                    <td>4 to 16 vCPUs<br>8 to 32 GB RAM<br>50 to 200 Gbps network</td>
+                    <td>API Gateways, core reverse proxies, central load balancers.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Part 3: Concrete System Design Examples</h2>
+        <p>These examples illustrate how different workloads force you to scale for a single specific bottleneck using our standard baseline node specifications.</p>
+
+        <div class="example-box">
+            <h3>Scenario A: The Network Bandwidth Bottleneck (Static Asset/URL Delivery)</h3>
+            <p><strong>System Requirements:</strong> 10 GB total storage, 45 Gbps peak egress throughput, 5 GB hot data, 15,000 read QPS.</p>
+            <ul>
+                <li>N<sub>storage</sub> = 10 GB / 2,000 GB = 0.005 nodes</li>
+                <li>N<sub>bandwidth</sub> = 45 Gbps / 15 Gbps = <span class="highlight">3.0 nodes</span></li>
+                <li>N<sub>ram</sub> = 5 GB / 32 GB = 0.15 nodes</li>
+                <li>N<sub>compute</sub> = 15,000 QPS / 10,000 QPS = 1.5 nodes</li>
+            </ul>
+            <p><strong>Verdict:</strong> You must provision <strong>3 nodes</strong> minimum (plus buffer). The network card is the single bottleneck. Data is fully duplicated across nodes, leaving hard drives completely empty.</p>
+            <p><strong>Optimized Instance Choice:</strong> Network Optimized profile to drop required node count down to 1 machine via a 50 Gbps pipe.</p>
+        </div>
+
+        <div class="example-box">
+            <h3>Scenario B: The RAM / Memory Bottleneck (Session Store Cluster)</h3>
+            <p><strong>System Requirements:</strong> 100 GB total storage, 5 Gbps throughput, 120 GB active hot session data, 8,000 QPS.</p>
+            <ul>
+                <li>N<sub>storage</sub> = 100 GB / 2,000 GB = 0.05 nodes</li>
+                <li>N<sub>bandwidth</sub> = 5 Gbps / 15 Gbps = 0.33 nodes</li>
+                <li>N<sub>ram</sub> = 120 GB / 32 GB = <span class="highlight">3.75 nodes &rarr; 4 nodes</span></li>
+                <li>N<sub>compute</sub> = 8,000 QPS / 10,000 QPS = 0.8 nodes</li>
+            </ul>
+            <p><strong>Verdict:</strong> You must provision <strong>4 nodes</strong> minimum. CPU, disk, and network interfaces remain highly underutilized, but the fleet size is entirely forced by the requirement to hold live states in memory.</p>
+            <p><strong>Optimized Instance Choice:</strong> Memory Optimized profile (e.g., 64 GB RAM per node), lowering node requirements down to 2 machines.</p>
+        </div>
+
+        <div class="example-box">
+            <h3>Scenario C: The Storage Bottleneck (Compliance Log Aggregator)</h3>
+            <p><strong>System Requirements:</strong> 12 TB total storage (due to long retention), 3 Gbps network throughput, 20 GB active hot data, 2,000 write QPS.</p>
+            <ul>
+                <li>N<sub>storage</sub> = 12 TB / 2 TB = <span class="highlight">6.0 nodes</span></li>
+                <li>N<sub>bandwidth</sub> = 3 Gbps / 15 Gbps = 0.2 nodes</li>
+                <li>N<sub>ram</sub> = 20 GB / 32 GB = 0.62 nodes</li>
